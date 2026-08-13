@@ -1,7 +1,7 @@
 # M1-T2 — Historical funding rate downloader
 
 **Milestone:** M1
-**Status:** Draft
+**Status:** Ready to implement — all open questions resolved 2026-08-12. One non-blocking data question remains (see Open questions).
 **Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
 OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.3, Section 4.1, Section 5 (M1)
@@ -109,19 +109,40 @@ docstring.
 
 **Q1 — RESOLVED: drop `mark_price`.** §3.3 amended accordingly on 2026-08-12.
 
-**Q2 — how far back?** Funding history extends to contract inception, far longer than the book
-window (M1-T3, 12 days/year). Fetch generously — ~90 rows/month — so M6 fits on a long series even
-though the backtest window is shorter.
+**Q2 — RESOLVED: fetch the full available history per symbol, back to contract inception.** At
+~90–180 rows/month it is negligible in size, and M6's AR(1) fit benefits from every observation.
+The backtest window remains the shorter book-constrained one (M1-T3: 2024-09 → 2026-08).
 
 This asymmetry needs stating in the writeup rather than quietly exploited: the funding *model* can
 be estimated on years of data while the *execution cost* model rests on a sparse sample of book
 days. Those are different evidential bases for the two halves of the edge calculation, and a
 reader is entitled to know which half is thinner.
 
-**Q4 — is the current (incomplete) month handled?** The archive is monthly-only, so the current
-month is absent or partial until it closes. Acceptance test 7 covers refusing to write a partial
-month silently; the backtest window should end at the last complete month.
+**Q3 — RESOLVED, and the answer is no. Measured 2026-08-12 (June 2026):**
 
-**Q3 — does the altcoin (OD-3) share the 8h interval?** Unknown until the symbol is chosen. The
-`funding_interval_hours` column makes this self-describing, but any hard-coded `× 3` per day
-elsewhere in the codebase would silently break. Nothing should assume 8h.
+| Symbol | Interval | Settlements | Funding rate range |
+|---|---|---|---|
+| `BTCUSDT` | 8h | 90 | −0.67 bp … +1.00 bp |
+| `ETHUSDT` | 8h | 90 | −1.02 bp … +1.00 bp |
+| `DOGEUSDT` | 8h | 90 | −0.81 bp … +1.00 bp |
+| `0GUSDT` | **4h** | 180 | −23.9 bp … +0.50 bp |
+| `1000BONKUSDT` | **4h** | 179 | −2.10 bp … +0.50 bp |
+
+The thin symbols settle **every 4 hours, not 8** — so the altcoin leg, which is the entire point of
+M8-T2, is exactly where a hard-coded 8h or `× 3`/day would break. Always read
+`funding_interval_hours`. This also refines OD-1's "8h for most symbols": true for majors,
+false for the class of symbol this project deliberately studies.
+
+Note the rate ranges too: `0GUSDT` reaches −23.9 bp per 4h settlement against BTC's −0.67 bp per
+8h. Six settlements a day at that magnitude is a far larger gross carry — and precisely why the
+execution-cost question matters more for thin symbols than liquid ones.
+
+**Q4 — RESOLVED: end the window at the last complete month.** The archive is monthly-only, so the
+current month is absent or partial until it closes. Acceptance test 7 covers refusing to write a
+partial month silently.
+
+**Open, non-blocking — `1000BONKUSDT` is missing a settlement.** June 2026 has 179 where 180
+are expected — an 8h gap after 2026-06-24 00:00 UTC where 4h is expected. This is a genuine
+upstream data gap, discovered while checking Q3, and it is the first concrete case for M1-T4's
+allowlist: either it gets explained (a venue interval change mid-month?) or it stays flagged.
+Useful as a real fixture for the completeness test rather than a synthesised one.

@@ -86,7 +86,8 @@ relocatable through `PERPCARRY_DATA_ROOT`.
 
 **Q2 — RESOLVED.** `httpx`, recorded as D-011.
 
-**Q3 — new, deferred.** The Tardis free tier publishes **no** `.CHECKSUM` files (verified: 404), so
-book downloads cannot be integrity-checked the way archive downloads can. `fetch_checksum` returns
-`None` there rather than failing. M1-T3 will need a different integrity signal — gzip decompression
-succeeding end-to-end is the obvious candidate, since a truncated `.gz` fails to inflate.
+**Q3 — RESOLVED: gzip inflation is the integrity signal for vendor downloads.** The vendor publishes
+no `.CHECKSUM` files (verified: 404), so archive-style verification is unavailable there;
+`fetch_checksum` already returns `None` rather than failing. Verified 2026-08-12 that a truncated
+`.gz` raises `EOFError: Compressed file ended before the end-of-stream marker was reached`, so a
+partial download cannot pass silently. No change needed here — M1-T3 owns the check.

@@ -1,7 +1,8 @@
 # M1-T3 — Order book historical data acquisition
 
 **Milestone:** M1
-**Status:** Draft — **unblocked 2026-08-12** by OD-2's resolution (was Blocked)
+**Status:** Draft — ready to implement. Unblocked 2026-08-12 by OD-2's resolution; licence read and
+all open questions resolved the same day.
 **Depends on:** M0-T4, M0-T6, OD-1 (resolved: Binance USD-M), OD-2 (resolved: vendor free tier)
 **Design doc:** Section 3.2, Section 4.1, OD-2, Risk R1
 
@@ -34,6 +35,44 @@ Schema: `exchange, symbol, timestamp, local_timestamp, is_snapshot, side, price,
 normalise on ingest to match every other dataset in §3.
 
 Size: ~449 MB compressed per BTCUSDT day (measured). Stream; never load whole.
+
+**Integrity.** The vendor publishes no `.CHECKSUM` files (verified: 404), so archive-style
+verification is unavailable. Use successful gzip inflation as the signal — verified 2026-08-12
+that a truncated `.gz` raises `EOFError: Compressed file ended before the end-of-stream marker was
+reached`, so a partial download cannot pass silently. `download.fetch_checksum` already returns
+`None` here rather than failing, so nothing needs changing in M0-T6.
+
+## Licence — read 2026-08-12
+
+The free samples are governed by the vendor's standard Terms of Service; there is no separate
+sample licence. What it permits and forbids, for this project specifically:
+
+**Permitted.** "Permitted Use" is defined as *internal business, research, educational or personal
+use* (Clause 9.1). The project's core use — calibrating an impact model for a research writeup —
+falls squarely inside it. No API key, no account, no fee.
+
+**Forbidden, and this constrains the repo.** Clause 9.2(2) prohibits redistributing the Data,
+"except for reselling or redistributing aggregated and calculated Derived Data" — where no raw Data
+is exposed and it "cannot reasonably be reconstructed". OHLC/OHLCV at ≥10-minute resolution is the
+worked example.
+
+Practical rules, which are stricter than convention C9 and must be followed:
+
+| Action | Allowed? |
+|---|---|
+| Download and analyse locally | Yes |
+| Commit raw book rows as a test fixture | **No** — use synthetic fixtures or Binance-archive rows |
+| Let book data reach a CI cache or build artifact | **No** |
+| Publish fitted impact coefficients, capacity curves, slippage-vs-size plots | Yes — aggregated, calculated, non-reconstructible |
+| Publish book snapshots, per-level depth, or anything permitting reconstruction | **No** |
+| Use it in a product or service | **No** (Clause 9.2.1) — not in scope anyway |
+
+**One residual ambiguity, flagged not resolved.** The terms explicitly bless redistributing derived
+data in the coarse-candle form; they do not explicitly address publishing research findings. A
+capacity curve exposes no raw data and cannot reconstruct a book, so it sits comfortably within the
+*intent* of 9.2(2) — but "comfortably within the intent" is not "expressly permitted". Since M9's
+output is public and resume-facing, the low-cost move is to email the vendor for written
+confirmation before publishing, and to credit them regardless. Not a blocker for M1–M8.
 
 ## Why sparse coverage is acceptable
 
@@ -96,13 +135,32 @@ needs are present and well-formed.
 
 ## Open questions
 
-**Q1 — how many months?** Recommend 12–24, chosen to overlap the funding history used by M6. At
-~449 MB/day compressed that is ~5.4–10.8 GB. Needs a decision before the first bulk pull.
+**Q1 — RESOLVED: 24 months, 2024-09-01 through 2026-08-01 inclusive.** That is 24 book days per
+symbol. Reasoning: it spans enough distinct market regimes for the impact model to be validated out
+of sample on *different* months rather than a random split of one; it sits entirely inside the
+funding history (which runs to contract inception, so M6 is unconstrained by this choice); and at
+~449 MB/day it is ~10.8 GB compressed for BTC, which is large but tractable on a laptop. Start by
+pulling **3 months** to exercise the pipeline end to end before committing to the full 24 — a
+mistake found on 10.8 GB of downloads is expensive.
 
-**Q2 — vendor licensing.** The free tier's terms have **not** been read. Must be done before
-relying on the data. It must never be committed or reach CI caches (C9).
+**Q2 — RESOLVED.** Terms read 2026-08-12; see the Licence section above. Research use is permitted;
+raw data must never be committed, published, or reach CI. One residual ambiguity about publishing
+derived findings is flagged there — worth a confirmation email before M9, not a blocker now.
 
-**Q3 — which symbols?** BTC is settled. OD-3 defers the altcoin to M8, but book days are tied to
-calendar dates, so pulling a couple of plausible candidates now costs only disk and avoids
-re-pulling later. Unlike live recording, nothing is lost by waiting — the archive is historical —
-so this is a convenience question, not a deadline.
+**Q3 — RESOLVED: pull BTCUSDT plus two altcoin candidates now.** Unlike live recording nothing is
+lost by waiting, so this is purely about avoiding a second bulk pull. Suggest `ETHUSDT` (liquid
+control, second data point for the model) and one thin name — `0GUSDT` has verified trades, funding
+and book coverage, and its tick/step are already derived. OD-3's final choice stays deferred to M8;
+this only ensures the data exists when it is made.
+
+**Q4 — RESOLVED: UTC-aligned, verified 2026-08-12** by downloading `0GUSDT` 2026-06-01 in full.
+First row `2026-06-01T00:00:01.245Z`, last `2026-06-01T23:59:59.598Z` — the same UTC day boundary
+the Binance archive uses, so book days and trade days align with no session offset. The file also
+opens with a genuine `is_snapshot=true` block (~2,823 rows for this symbol) and timestamps are
+microseconds, both as specced above.
+
+**Finding (not an open question) — it improves Q1's arithmetic.** File size scales with liquidity far more sharply
+than assumed: `0GUSDT` is **10 MB** for a full book day against BTCUSDT's 449 MB (`DOGEUSDT`:
+123 MB). So the 24-month pull is ~10.8 GB for BTC but only ~240 MB for a thin altcoin. Pulling
+several altcoin candidates is therefore nearly free, and the storage decision is really a decision
+about BTC alone.

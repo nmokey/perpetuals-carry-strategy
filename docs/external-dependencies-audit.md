@@ -178,16 +178,35 @@ metadata tree (only `futures/`, `option/`, `spot/`); Tardis's instruments API re
 subscription (`"available only for active pro and business subscriptions"`).
 
 **Workaround verified:** infer from the trades archive by taking the GCD of distinct observed
-prices and quantities. On `0GUSDT` 2026-08-01 (51,469 trades) this yields tick `0.01`, step `1`.
+prices and quantities. On `0GUSDT` this yields tick `0.0001`, step `1`, reproduced across three
+disjoint days (2026-03-02, 2026-07-15, 2026-08-01) and on `ETHUSDT` (`0.01` / `0.001`).
+
+> **Correction (same day).** An earlier draft of this section reported tick `0.01` for `0GUSDT`.
+> That was wrong — a bug in the probe, which took the `min` of the observed decimal exponents
+> rather than the `max`, truncating precision by 100×. The symbol trades at 4 decimal places.
+> The lesson is C12's: the derivation must be tested against a known grid, since a wrong tick is a
+> plausible number rather than an error.
 Caveat: this recovers *observed* granularity, which equals the true tick only when enough distinct
 prices occur — safe for a liquid symbol over a full day, less so for a thin one over a short
 window. Should be computed once per symbol over a long window and committed as a lookup.
 
-### A12 — "8h funding for most symbols". Unverified but self-describing.
+### A12 — "8h funding for most symbols". **Now measured, and materially misleading.**
 
-BTCUSDT confirmed 8h (90 settlements in a 30-day month). The claim across symbols could not be
-checked — `/fapi/v1/fundingInfo` is geo-blocked. It does not need to be: `funding_interval_hours`
-is a per-row column, so nothing should hard-code 8h or `× 3` per day.
+Verified 2026-08-12 from the archive (June 2026): `BTCUSDT`, `ETHUSDT` and `DOGEUSDT` settle every
+**8h** (90/month); `0GUSDT` and `1000BONKUSDT` settle every **4h** (180/month).
+
+The claim is true for majors and false for exactly the class of symbol this project sets out to
+study (OD-3's thin altcoin, M8-T2). Anything hard-coding 8h or `× 3`/day would silently produce
+half the correct annualised funding on the altcoin leg. `funding_interval_hours` is a per-row
+column — always read it.
+
+Two related findings from the same check:
+
+- **Thin-symbol funding is an order of magnitude larger.** `0GUSDT` reached −23.9 bp in a single
+  4h settlement against BTC's −0.67 bp per 8h. Six settlements a day at that scale is a much larger
+  gross carry, which is exactly why execution cost decides whether it is real.
+- **`1000BONKUSDT` is missing a settlement** — 179 where 180 are expected, an 8h gap after
+  2026-06-24 00:00 UTC. A genuine upstream gap, and the first concrete case for M1-T4's allowlist.
 
 ### A13 — "Known ADV figures" for M4-T3. No authoritative source; derivable.
 

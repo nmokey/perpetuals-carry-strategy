@@ -24,6 +24,49 @@ Milestone status at a glance:
 
 ## 2026-08-12
 
+### All M1 open questions resolved — specs ready to implement
+
+Licence read first, since it gated M1-T3. Every remaining question was then settled by measurement
+rather than judgement.
+
+**Licence (Tardis ToS, read in full).** Free samples fall under the standard terms; "Permitted Use"
+is *internal business, research, educational or personal use*, so the project's core use is
+licensed. Clause 9.2(2) forbids redistributing the Data, permitting only aggregated calculated
+Derived Data from which raw data cannot be reconstructed. Practical effect: fitted coefficients,
+capacity curves and plots are publishable; **raw book rows must never be committed, published, or
+reach CI** — stricter than C9, and it rules out real vendor rows as test fixtures. One residual
+ambiguity: publishing research findings is not expressly addressed, only redistribution of data.
+Worth a confirmation email before M9; not a blocker before then.
+
+**Measured resolutions.**
+
+- **Volume reconciliation is exact, not approximate.** Summed trade quantity equals summed 1m
+  `klines` volume with zero difference across `0GUSDT`, `DOGEUSDT` and `ETHUSDT` — the last with
+  1.9M fractional-quantity trades, where float error was the plausible worry. Both float64 and
+  `Decimal` agree. The criterion is now an equality in both the design doc and the specs.
+- **Thin symbols settle every 4 hours, not 8.** BTC/ETH/DOGE are 8h; `0GUSDT` and `1000BONKUSDT`
+  are 4h. OD-1's "8h for most symbols" is true for majors and false for exactly the class of symbol
+  M8-T2 studies — anything hard-coding 8h would halve the altcoin's annualised funding.
+- **A real upstream data gap**: `1000BONKUSDT` has 179 June settlements where 180 are expected, an
+  8h hole after 2026-06-24 00:00 UTC. First concrete case for M1-T4's allowlist, and a better test
+  fixture than anything synthetic.
+- **Vendor days are UTC-aligned** — verified by downloading a full book day: 00:00:01.245Z to
+  23:59:59.598Z, opening with a real `is_snapshot` block. Book and trade days align with no offset.
+- **Book size scales steeply with liquidity**: 449 MB/day for BTCUSDT but **10 MB** for `0GUSDT`.
+  Pulling several altcoin candidates is nearly free; the storage decision is about BTC alone.
+- **Integrity signal for vendor files**: truncated `.gz` raises `EOFError` on inflation, so a
+  partial download cannot pass silently. The vendor publishes no checksums.
+
+**Decisions taken:** 24-month book window (2024-09 → 2026-08), trades continuous over the same span
+plus a month of lead-in, funding fetched to contract inception, three disjoint days for tick
+derivation, `data_quality_allowlist.yaml` for acknowledged gaps, validation nightly on non-vendor
+fixtures.
+
+**Correction.** The earlier claim that `0GUSDT`'s tick is `0.01` was wrong — a probe bug taking the
+`min` of decimal exponents rather than the `max`, truncating precision 100×. It is `0.0001`,
+reproduced across three disjoint days. Corrected in the audit, blockers and M1-T5. Exactly the
+failure mode M1-T5's test 1 now pins: a plausible wrong number, not an error.
+
 ### M0-T6 implemented — the ingestion layer can now actually download
 
 `python/perpcarry/ingestion/download.py`: streamed `fetch` with bounded retry, SHA-256

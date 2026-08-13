@@ -1,7 +1,7 @@
 # M1-T1 — Historical trades downloader
 
 **Milestone:** M1
-**Status:** Draft
+**Status:** Ready to implement — all open questions resolved 2026-08-12.
 **Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
 OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.1, Section 4.1, Section 5 (M1)
@@ -67,9 +67,10 @@ without a deduplication step; that path appends (verified in `tests/test_storage
 
 ## Acceptance criteria
 
-Copied verbatim from the design doc Section 5 table:
+Copied verbatim from the design doc Section 5 table (revised 2026-08-12):
 
-> Downloaded row counts consistent with venue-reported volume; no gaps in `trade_id` sequence
+> Daily summed quantity equals the same day's `klines` volume **exactly**; `trade_id` contiguous
+> within and across days
 
 Expanded into checkable tests:
 
@@ -77,7 +78,7 @@ Expanded into checkable tests:
 |---|---|---|
 | 1 | `trade_id` is strictly increasing and contiguous within a day; a synthetic gap is detected and reported | `tests/ingestion/test_fetch_trades.py` |
 | 2 | Aggressor side maps correctly: `is_buyer_maker=True → "sell"`, `False → "buy"` | same |
-| 3 | Daily `quantity.sum()` reconciles with the same day's `klines` volume within a documented tolerance | same, marked `network` |
+| 3 | Daily summed quantity equals the same day's `klines` volume exactly, summed as `Decimal` | same, marked `network` |
 | 4 | Output conforms to the Section 3.1 schema — exact dtypes, no extra/missing columns | same |
 | 5 | Re-fetching a date is idempotent — row count and content unchanged | same |
 | 6 | `.CHECKSUM` mismatch raises rather than writing a partial day | same |
@@ -85,7 +86,8 @@ Expanded into checkable tests:
 
 Test 3 is the "consistent with venue-reported volume" half. `klines` carries a per-interval
 volume field for the same symbol/day and is the natural cross-source check, since the REST
-`/fapi/v1/ticker/24hr` endpoint is geo-blocked. Tolerance must be documented, not silently wide.
+`/fapi/v1/ticker/24hr` endpoint is geo-blocked. It is an **equality, not a tolerance** — measured
+zero difference across three symbols; see `M1-T4-validate-data.md` Q1 for the numbers.
 
 ## Testing approach
 
@@ -108,15 +110,22 @@ the reconciliation criterion in terms of `klines` volume. If `trades` proves imp
 for the chosen range, the criterion must be relaxed to monotonicity and the design doc updated in
 the same change — do not switch to `aggTrades` while leaving the criterion as written.
 
-**Q2 — what date range?** Still open, but no longer blocked. Book data (M1-T3) is first-of-month
-only, back to 2020, so the binding constraint is now a *choice* of how many months to pull rather
-than an availability limit. Suggest: pick the book window first (12–24 months), then fetch trades
-across that whole span continuously — trades are cheap and continuous coverage helps ADV and the
-volume profile even on days without book data.
+**Q2 — RESOLVED: 2024-08-01 through 2026-08-01, continuous.** This is M1-T3's 24-month book window
+(2024-09-01 → 2026-08-01) plus one month of lead-in so ADV and the volume profile are defined on
+the first book day rather than starting cold. Trades are cheap and continuous coverage helps on
+days without book data, so there is no reason to sample.
+
+Use **monthly** archives for the backfill and daily only for any tail — 24 monthly files per symbol
+instead of ~730 daily ones.
 
 **Q3 — RESOLVED.** OD-1 is settled on Binance USD-M. The archive is reachable and current; the
 live API is geo-blocked but unused. See `external-dependencies-audit.md`.
 
-**Q4 — new.** `klines` lives under an **interval subdirectory**
+**Q4 — RESOLVED (a note, not a decision).** `klines` lives under an **interval subdirectory**
 (`daily/klines/{SYM}/1m/{SYM}-1m-{date}.zip`), unlike every other dataset. The reconciliation code
 must not reuse the flat path builder.
+
+**Q5 — RESOLVED: the volume reconciliation is exact, not approximate.** Measured across three
+symbols including 1.9M fractional-quantity `ETHUSDT` trades: summed trade quantity equals summed 1m
+`klines` volume with zero difference. Assert equality using `Decimal` summed from the raw strings.
+Full measurements in `M1-T4-validate-data.md` Q1.

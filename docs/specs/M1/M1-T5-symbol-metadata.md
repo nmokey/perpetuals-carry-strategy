@@ -1,7 +1,7 @@
 # M1-T5 — Symbol metadata derivation
 
 **Milestone:** M1
-**Status:** Draft
+**Status:** Ready to implement — all open questions resolved 2026-08-12.
 **Depends on:** M1-T1
 **Design doc:** Section 5 (M1), OD-1
 
@@ -23,10 +23,25 @@ Infer from observed data. For a symbol, over a long window of `trades`:
 - **tick size** = GCD of the distinct observed prices
 - **step size** = GCD of the distinct observed quantities
 
-**Verified 2026-08-12** on `0GUSDT` 2026-08-01 (51,469 trades): recovers tick `0.01`, step `1`.
+**Verified 2026-08-12** across three disjoint days per symbol:
 
-Use `decimal.Decimal`, not floats — computing a GCD over binary floats will produce nonsense.
-Scale to integers by the maximum observed decimal exponent, then reduce.
+| Symbol | Window | Tick | Step | Distinct prices | Trades |
+|---|---|---|---|---|---|
+| `0GUSDT` | 2026-03-02 | `0.0001` | `1` | 321 | 202,668 |
+| `0GUSDT` | 2026-07-15 | `0.0001` | `1` | 371 | 472,756 |
+| `0GUSDT` | 2026-08-01 | `0.0001` | `1` | 81 | 51,469 |
+| `ETHUSDT` | 2026-03-02 | `0.01` | `0.001` | 17,267 | 12,411,033 |
+| `ETHUSDT` | 2026-07-15 | `0.01` | `0.001` | 8,344 | 5,212,944 |
+| `ETHUSDT` | 2026-08-01 | `0.01` | `0.001` | 5,384 | 1,893,589 |
+
+Stable across every window, including the thin 81-distinct-price day — more robust than feared.
+
+Use `decimal.Decimal`, not floats: a GCD over binary floats produces nonsense. Scale to integers by
+the **maximum** observed decimal exponent, then reduce.
+
+> **That `max` is load-bearing.** The first probe used `min` and reported `0.0001` as `0.01` — a
+> 100× error that looked entirely plausible. It produced a valid-looking number, not an exception,
+> which is precisely why test 1 below pins the derivation against a known grid.
 
 ### The limitation, stated plainly
 
@@ -78,9 +93,14 @@ error, so the code must be able to say "not enough data" (convention C12).
 
 ## Open questions
 
-**Q1 — how long a window?** Suggest one month of trades per symbol; cheap for the archive and long
-enough that the stability check is meaningful.
+**Q1 — RESOLVED: three sampled days spanning ≥3 months, not a contiguous month.** The measurements
+above show the estimate is already stable on a single thin day, so a full month buys little; what
+buys confidence is *disjoint* windows, which also detects a mid-window re-tick. Concretely: sample
+the first, middle and last month of the study window, one day each, and require all three to agree.
+Cheaper than a contiguous month and a strictly better check.
 
-**Q2 — is an overestimated tick actually harmful for the thin symbol (OD-3)?** It affects M2's book
-granularity and M4's normalisation. Worth quantifying once the altcoin is chosen rather than
-assuming it is negligible.
+**Q2 — RESOLVED: overestimation is a real risk but the stability check catches it.** All three
+`0GUSDT` windows agree despite one having only 81 distinct prices. The demonstrated failure mode
+was not thin data but a **bug in the exponent handling**, which is now pinned by test 1. If the
+three windows ever disagree, the correct response is to widen the window rather than pick the
+finest — a disagreement may equally mean the venue re-ticked the symbol (see Out of scope).

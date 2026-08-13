@@ -1,7 +1,7 @@
 # M1-T4 — Data validation / QA pass
 
 **Milestone:** M1
-**Status:** Draft
+**Status:** Ready to implement — all open questions resolved 2026-08-12.
 **Depends on:** M1-T1, M1-T2, M1-T3, M1-T5
 **Design doc:** Section 3, Section 4.1, Section 5 (M1)
 
@@ -40,7 +40,7 @@ Grouped by what they protect against.
 |---|---|
 | No duplicate `(symbol, trade_id)` | Re-fetch bugs and overlapping monthly/daily pulls |
 | `timestamp` non-decreasing within each partition | Section 5's "non-monotonic sequences" criterion |
-| Daily traded volume reconciles against `klines` within tolerance | Independent cross-source check |
+| Daily traded volume reconciles against `klines` **exactly** | Independent cross-source check — see Q1; this is an equality, not a tolerance |
 | Every funding settlement falls inside the trades coverage window | Detects legs assembled over mismatched ranges |
 | **All datasets come from the same venue** | Guards the failure mode M1-T3 identifies as fatal to the result |
 
@@ -107,14 +107,29 @@ criterion is either unachievable or gets satisfied by weakening the checks.
 
 ## Open questions
 
-**Q1 — what tolerance for the volume reconciliation?** `klines` volume and summed trade quantity
-may differ slightly at day boundaries. A number needs choosing and justifying; "within 0.1%" is a
-guess until measured on real data.
+**Q1 — RESOLVED: require exact equality.** Measured 2026-08-12 on 2026-08-01 data — summed trade
+quantity equals summed 1m `klines` volume with **zero** difference:
 
-**Q2 — where does the allowlist live?** Suggest a committed YAML/JSON of acknowledged gaps with
-dates and reasons, so it is reviewable in diffs. It is effectively a record of known data
-limitations and should feed the M9 writeup's caveats section directly.
+| Symbol | Trades | Σ trade qty | Σ klines volume | Rel. diff |
+|---|---|---|---|---|
+| `0GUSDT` | 51,469 | 24270655.0 | 24270655 | 0 |
+| `DOGEUSDT` | 542,309 | 3249377469.0 | 3249377469 | 0 |
+| `ETHUSDT` | 1,893,589 | 1873612.610 | 1873612.610 | 0 |
 
-**Q3 — does this run in CI?** It needs real data, so not in the per-PR tier. Options: nightly
-against a small committed fixture corpus, or purely on-demand. Recommend nightly on fixtures — it
-keeps the checks themselves from rotting even though the real corpus is not in CI (C10).
+`ETHUSDT` was included deliberately: fractional quantities (step `0.001`) across 1.9M trades, where
+float summation error was the plausible worry. Both float64 and exact `Decimal` summation agree.
+
+Sum with `Decimal` from the raw strings anyway — float64 happening to agree at this scale is not a
+guarantee at another, and an exact check that occasionally needs a documented exception is more
+useful than a tolerance wide enough to hide a genuinely missing chunk of a day. If a symbol ever
+fails, that is a finding to investigate, not a threshold to widen.
+
+**Q2 — RESOLVED: `data_quality_allowlist.yaml`, committed at the repo root of the ingestion
+package.** One entry per acknowledged gap: dataset, symbol, date range, reason, and the date it was
+acknowledged. Reviewable in diffs, and it doubles as the source for the M9 writeup's data-caveats
+section — which is the real reason it must be a file rather than a runtime flag.
+
+**Q3 — RESOLVED: nightly, against committed fixtures.** The real corpus cannot go in CI (size, and
+the vendor licence forbids redistributing raw book data — see M1-T3). Fixtures must therefore be
+either synthetic or drawn from the Binance archive only, **never** vendor book rows. This keeps the
+checks themselves from rotting without putting data in the repo (C10, C9).

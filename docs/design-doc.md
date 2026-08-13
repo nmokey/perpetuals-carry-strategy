@@ -243,7 +243,7 @@ Each milestone can, in principle, stop and produce a coherent deliverable on its
 
 | ID | Task | Deliverable | Acceptance Criteria | Depends On |
 |---|---|---|---|---|
-| M1-T1 | Historical trades downloader | `fetch_trades.py`, using the archive's **`trades`** dataset (not `aggTrades`) | Daily quantity reconciles with the same day's `klines` volume within a documented tolerance; `trade_id` contiguous within and across days | M0-T4, M0-T6 |
+| M1-T1 | Historical trades downloader | `fetch_trades.py`, using the archive's **`trades`** dataset (not `aggTrades`) | Daily summed quantity equals the same day's `klines` volume **exactly** (measured: zero difference across three symbols, incl. 1.9M fractional-qty trades); `trade_id` contiguous within and across days | M0-T4, M0-T6 |
 | M1-T2 | Historical funding rate downloader | `fetch_funding.py` | Settlement count equals `24 / funding_interval_hours × days`; consecutive settlements are one interval apart within a ±5s tolerance (source timestamps jitter ~1 ms) | M0-T4, M0-T6 |
 | M1-T3 | Order book historical data acquisition | `fetch_book.py`, pulling Tardis free-tier `incremental_book_L2` | Book state reconstructable at any timestamp within a downloaded day; replayed top-25 levels match the same day's `book_snapshot_25` | M0-T4, M0-T6 |
 | M1-T4 | Data validation/QA pass | `validate_data.py` | Zero *unexplained* gaps, duplicate timestamps, or non-monotonic sequences; every acknowledged gap carries a documented reason in a committed allowlist | M1-T1, M1-T2, M1-T3, M1-T5 |

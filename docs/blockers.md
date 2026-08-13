@@ -143,11 +143,14 @@ which the design doc notes as needing it.
 instruments API is paid-only (`"available only for active pro and business subscriptions"`).
 
 **Workaround verified.** Infer from the trades archive via GCD of distinct observed prices and
-quantities — on `0GUSDT` (51,469 trades) this recovers tick `0.01`, step `1`. Caveat: it recovers
-*observed* granularity, which equals the true tick only with enough distinct prices; compute once
-per symbol over a long window and commit the result rather than deriving it ad hoc.
+quantities — on `0GUSDT` this recovers tick `0.0001`, step `1`, stable across three disjoint days;
+`ETHUSDT` gives `0.01` / `0.001`. Scale by the **maximum** observed decimal exponent, not the
+minimum — getting that backwards silently truncates precision by 100× (it did, in the first probe).
 
-**Unblocked by.** Adding an M1 task for it — currently specified nowhere.
+Caveat: it recovers *observed* granularity, which equals the true tick only with enough distinct
+prices; compute over a long window and commit the result rather than deriving it ad hoc.
+
+**Resolved by** M1-T5, specced 2026-08-12. Cross-window stability is its acceptance criterion.
 
 ---
 
