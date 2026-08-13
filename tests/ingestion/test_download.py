@@ -94,13 +94,14 @@ def test_permanent_failure_raises_immediately_and_names_the_url(tmp_path):
 
 
 def test_no_file_written_when_the_response_fails_before_any_bytes(tmp_path):
-    dest = tmp_path / "out.csv"
+    target = tmp_path / "downloads"
+    dest = target / "out.csv"
 
     with client_for(always(500)) as client, pytest.raises(DownloadError):
         fetch("https://example.test/x.csv", dest, client=client, backoff=0)
 
     assert not dest.exists()
-    assert list(tmp_path.iterdir()) == []
+    assert list(target.iterdir()) == []
 
 
 def test_no_partial_file_survives_a_mid_stream_failure(tmp_path):
@@ -110,7 +111,8 @@ def test_no_partial_file_survives_a_mid_stream_failure(tmp_path):
     must not survive. Note a status-only failure does *not* exercise this path -- nothing
     is written before the status check -- which is why this test streams real bytes first.
     """
-    dest = tmp_path / "out.csv"
+    target = tmp_path / "downloads"
+    dest = target / "out.csv"
 
     def handler(request: httpx.Request) -> httpx.Response:
         def body():
@@ -123,7 +125,7 @@ def test_no_partial_file_survives_a_mid_stream_failure(tmp_path):
         fetch("https://example.test/x.csv", dest, client=client, backoff=0, chunk_size=8)
 
     assert not dest.exists()
-    assert list(tmp_path.iterdir()) == [], "a truncated .part file was left behind"
+    assert list(target.iterdir()) == [], "a truncated .part file was left behind"
 
 
 def test_download_streams_rather_than_buffering(tmp_path):
@@ -170,6 +172,26 @@ def test_missing_checksum_is_not_an_error(tmp_path):
 
 
 # --- caching -----------------------------------------------------------------
+
+
+def test_default_cache_lives_under_the_data_root(isolated_data_root):
+    """The isolation the conftest fixture relies on -- asserted, not assumed.
+
+    If ``cache_dir()`` ever stops deriving from the data root, tests would silently start
+    writing into the project's real ``data/.cache/`` again.
+    """
+    from perpcarry.ingestion.download import cache_dir
+
+    assert cache_dir() == isolated_data_root / ".cache"
+
+
+def test_cached_fetch_without_dest_stays_inside_the_data_root(isolated_data_root):
+    handler, calls = counting()
+
+    with client_for(handler) as client:
+        path = cached_fetch("https://example.test/archive.zip", client=client)
+
+    assert path.is_relative_to(isolated_data_root)
 
 
 def test_cached_fetch_skips_the_request_when_a_copy_exists(tmp_path):

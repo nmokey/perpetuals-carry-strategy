@@ -9,7 +9,7 @@ Milestone status at a glance:
 | Milestone | Status |
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
-| M1 — Data acquisition | Specced, not started. Unblocked — OD-1/OD-2 resolved |
+| M1 — Data acquisition | In progress — T1 complete; T2–T5 specced and ready |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,57 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-12
+
+### M1-T1 complete — trades downloader
+
+`ingestion/fetch_trades.py` + `binance_archive.py` (URL construction, shared with the remaining M1
+fetchers). 22 tests: 21 offline against a 200-row real-archive fixture, 1 `network`. Suite now 54
+offline + 2 network, all green.
+
+**The spec's predicted bug happened — through an unpredicted mechanism.** The spec flagged the
+aggressor-side mapping as "the single easiest thing to get backwards, with no loud failure mode".
+It did go wrong on first write, but not by inverting the condition: the CSV is read with
+`dtype=str` to preserve precision, so `is_buyer_maker` arrives as the *strings* `"true"`/`"false"`,
+and `bool("false")` is `True`. `.astype(bool)` therefore labelled **every trade a sell**, uniformly
+and silently. `test_real_fixture_has_both_sides` caught it on the very first run.
+
+Worth recording as a general lesson: the spec was right that the area needed a dedicated test, and
+wrong about how it would break. Predicting *where* risk lives is useful even when predicting *how*
+it manifests is not.
+
+Two behaviours chosen deliberately: `date` is derived per-trade from the timestamp (so monthly
+archives split into correct daily partitions), and `backfill` refuses to skip a missing month
+unless `allow_missing` is passed — a 404 before a symbol's listing date is explainable, but
+explainable gaps must be acknowledged rather than absorbed. Skipped months are returned for M1-T4's
+allowlist.
+
+Verified by mutation: **7/7 injected defects detected**, each by exactly one named test. The
+`network` test confirms the exact klines reconciliation against the live archive.
+
+**The pre-push review then found six more things, one serious.** Tests were not isolated from the
+real data root, and `cached_fetch` writes into `data/.cache/` under the *archive's own filename* —
+so a test's synthetic payload had left a 199-row punched fixture sitting in
+`data/.cache/0GUSDT-trades-2026-08.zip`. A later real backfill would have reused it as genuine
+archive data. Fixed structurally: an autouse `conftest.py` fixture repoints `PERPCARRY_DATA_ROOT`
+per test, with tests asserting the cache stays inside it (C9 updated).
+
+Second substantive finding: `backfill` never checked `trade_id` continuity **across** month
+boundaries, though the criterion says "within and across days" — a wholly missing file between two
+intact months would leave both looking perfect. Also fixed: duplicates reported as "gaps" despite a
+different cause, `klines_volume` skipping the checksum verification every other download performs,
+and a docstring claiming exactness it did not provide.
+
+Then mutation testing found **three of those fixes were themselves untested** and passed with the
+fix deleted. Now caught, and recorded in C12: code written in response to a review is at least as
+likely to be under-tested as code written the first time.
+
+Asking what the suite still did *not* cover then found two more: **`backfill` could store nothing
+at all** and every test passed (all coverage was of refusal paths, none of the happy path), and a
+monthly archive whose rows spill into the next month **silently loses them** to
+`delete_matching` — two rows in, one row gone, demonstrated. Both now guarded and mutation-checked.
+
+Final state: 64 offline + 2 network tests green, `data/` empty after a full run, and 7/7 mutations
+on `fetch_trades.py` caught.
 
 ### All M1 open questions resolved — specs ready to implement
 

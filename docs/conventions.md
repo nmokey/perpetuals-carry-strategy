@@ -144,8 +144,17 @@ gitignored. Same for build output.
 and invites accidental redistribution of licensed vendor data (relevant if OD-2 resolves to a
 paid tick-data vendor).
 
-**How to apply.** Point tests at `tmp_path` or override `PERPCARRY_DATA_ROOT`; never write test
-fixtures into `data/`.
+**How to apply.** `tests/conftest.py` has an autouse fixture repointing `PERPCARRY_DATA_ROOT` at a
+per-test tmp directory, so this holds by construction rather than by discipline. Do not remove it,
+and do not bypass it by passing an explicit path into `data/`.
+
+**Why it is enforced structurally.** Anything calling `cached_fetch` writes into `data/.cache/`
+under the *archive's own filename*. A test serving a synthetic payload therefore leaves a file a
+later real backfill will happily reuse — fabricated trades entering the research corpus, named and
+shaped exactly like genuine archive data. This happened during M1-T1: a 199-row punched fixture sat
+in `data/.cache/0GUSDT-trades-2026-08.zip` until the pre-push review found it. Checksum
+verification would catch it for sources that publish one, but that is a second line of defence, not
+the first.
 
 ---
 
@@ -197,6 +206,10 @@ the writeup.
 **Read detections, not failure counts.** A mutation is caught if at least one test fails *and* its
 name identifies the cause. A single defect tripping five tests is overlap — five tests sharing a
 code path — not five independent checks, and it is not evidence of better coverage.
+
+**A fix needs its own mutation check.** Code added in response to a review is exactly as likely to
+be under-tested as code written the first time — arguably more, since it arrives without a spec.
+Three fixes from the M1-T1 review shipped with tests that passed while the fix was deleted.
 
 **How to apply.** Round-trip and equality assertions use `check_exact=True` and `check_dtype=True`.
 Never coerce or normalise a value before comparing it — if the code under test changes something,

@@ -1,7 +1,7 @@
 # M1-T1 — Historical trades downloader
 
 **Milestone:** M1
-**Status:** Ready to implement — all open questions resolved 2026-08-12.
+**Status:** **Complete** (2026-08-12)
 **Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
 OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.1, Section 4.1, Section 5 (M1)
@@ -88,6 +88,72 @@ Test 3 is the "consistent with venue-reported volume" half. `klines` carries a p
 volume field for the same symbol/day and is the natural cross-source check, since the REST
 `/fapi/v1/ticker/24hr` endpoint is geo-blocked. It is an **equality, not a tolerance** — measured
 zero difference across three symbols; see `M1-T4-validate-data.md` Q1 for the numbers.
+
+## As built
+
+`python/perpcarry/ingestion/fetch_trades.py`, plus `binance_archive.py` for URL construction
+(shared with the other M1 fetchers — the path shapes are not uniform, and `klines`' interval
+segment is the trap). 22 tests: 21 offline against a 200-row real-archive fixture, 1 `network`.
+CLI: `python -m perpcarry.ingestion.fetch_trades --symbol BTCUSDT --start … --end …`.
+
+**The spec's predicted bug happened, exactly as predicted.** The aggressor-side mapping was wrong
+on first write — but not by inverting the logic. The CSV is read with `dtype=str` to preserve
+numeric precision, which makes `is_buyer_maker` the *strings* `"true"`/`"false"`, and
+`bool("false")` is `True`. So `.astype(bool)` marked **every trade a sell**, uniformly and
+silently. `test_real_fixture_has_both_sides` caught it on the first run. Parsing is now explicit
+and rejects anything unrecognised.
+
+This is the failure mode the spec called out — "no loud failure mode, so it gets a dedicated
+test" — arriving through a mechanism the spec did not anticipate. The test earned its place; the
+reasoning about *why* it was needed did not depend on guessing the mechanism right.
+
+Two design choices worth noting:
+
+- **`date` is derived per-trade from the timestamp**, not from the requested date, so monthly
+  archives split into correct daily partitions and an out-of-day row cannot be misfiled.
+- **`backfill` refuses to skip a missing month unless `allow_missing` is passed.** A 404 usually
+  means the symbol was not yet listed (`0GUSDT` 404s in 2024-09), which is explainable — but
+  explainable gaps must be acknowledged, not absorbed. Skipped months are returned for the caller
+  to record in M1-T4's allowlist.
+
+**Verified by mutation, 7/7 defects detected**, each by exactly one named test: side inverted,
+date taken from the request, gaps never reported, gapped month stored anyway, schema drift
+undetected, 404 silently skipped, checksum never fetched.
+
+### What the pre-push review changed
+
+Six findings, one of them serious.
+
+**Cache poisoning of the real data root (serious).** `cached_fetch` writes into `data/.cache/`
+under the archive's own filename, and tests were not isolated from it — so a test serving a
+synthetic payload left `data/.cache/0GUSDT-trades-2026-08.zip` containing a 199-row punched
+fixture. A later real backfill would have reused it: fabricated trades entering the corpus, named
+and shaped like genuine archive data. Fixed structurally with an autouse `conftest.py` fixture
+repointing `PERPCARRY_DATA_ROOT` per test, plus tests asserting the cache stays inside it.
+
+**Continuity was not checked across month boundaries.** The acceptance criterion says "contiguous
+within *and across* days"; per-month checks cannot see a wholly missing file between two intact
+months. `backfill` now carries the last ID across iterations — and resets it after an allowed skip,
+since a skipped month breaks the sequence legitimately.
+
+Also fixed: duplicates were reported as "gaps" despite having a different cause (overlapping
+re-fetch, not lost data) and now have their own check; `klines_volume` skipped checksum
+verification that every other download performs; `total_quantity`'s docstring claimed to sum from
+the CSV strings when it sums float64 reprs; a dead `skiprows=0`.
+
+Two further gaps were then found by asking what the suite did *not* cover:
+
+- **`backfill` could store nothing at all and all 47 tests passed.** Every test covered refusal
+  behaviour; the module's actual purpose had no positive assertion.
+- **A monthly archive whose rows spill into the next month silently loses them.** Those rows land
+  in the next month's partition, and writing that month deletes them (`write_parquet` uses
+  `delete_matching`) — demonstrated: two rows in, one row gone. Observed archives are clean, but
+  the failure is invisible, so `backfill` now refuses rather than trusts.
+
+**Then mutation testing found three of those fixes were themselves untested** — the boundary reset,
+the duplicate check and the klines checksum all survived deletion. The skip test in particular
+began with a 404, so the boundary state was never set and the reset it claimed to cover was never
+exercised. All three now fail when their fix is removed.
 
 ## Testing approach
 
