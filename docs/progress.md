@@ -8,7 +8,7 @@ Milestone status at a glance:
 
 | Milestone | Status |
 |---|---|
-| M0 — Scaffolding & environment | **Complete** (2026-08-12), pending first green CI run |
+| M0 — Scaffolding & environment | **Complete** (2026-08-12), CI green |
 | M1 — Data acquisition | Not started (blocked: B-001) |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
@@ -23,6 +23,32 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-12
+
+### M1 specs written; two findings that change OD-2
+
+Specs for all four M1 tasks are in `docs/specs/M1/`. Written against the venue's actual data rather
+than its documentation — every claim below was verified by downloading and inspecting real files.
+
+**M1-T1 (trades)** and **M1-T2 (funding)** are cleanly specified and unblocked: the Binance archive
+carries both, is current through 2026-08-01, and is not geo-blocked. Concrete details that would
+have been guessed wrong otherwise: the funding archive schema is `calc_time,
+funding_interval_hours, last_funding_rate` — no `symbol`, and **no `mark_price`**, which Section
+3.3 specifies; and settlement timestamps jitter by 1 ms, so naive integer-hour differencing reports
+a phantom "7-hour" gap.
+
+**M1-T3 (order book) stays blocked**, and the evidence changes the decision (B-005): OD-2 option
+(c) does not exist as described. `bookDepth` is not an order book — it is cumulative depth at 12
+percentage bands, ~30s sampling, no sequence numbers — and `bookTicker` (L1) was discontinued after
+2024-03-30. There is nothing for the M2 replayer to replay, so "start with (c) to unblock M2" is
+not an available path, and M1-T3's acceptance criterion is unsatisfiable under it.
+
+Compounding that (B-004): **Binance's REST and websocket APIs are geo-blocked from this location**,
+as is Bybit. OKX works and serves true L2 with `seqId`. So Binance is the better source for history
+and an unavailable one for live capture. A fourth option not in the design doc — run the project on
+OKX end to end — is now the most direct route to the stated criterion.
+
+**M1-T4 (validation)** is specified with a note that the criterion's word "unexplained" requires an
+allowlist of acknowledged gaps, or it is either unachievable or satisfied by weakening the checks.
 
 ### M0-T4 round-trip test strengthened
 
@@ -67,7 +93,11 @@ Also narrowed `requires-python` from `>=3.11` to `>=3.12` (D-008) — 3.11 was a
 and raised the CMake Python floor to match. `uv sync --locked` caught the stale lockfile
 immediately, which is the check working as designed.
 
-**Not yet true:** CI has never run. The ubuntu leg is entirely unproven; see `blockers.md`.
+**First run green on all four jobs** — `python` and `cpp`, on `ubuntu-latest` and `macos-latest`
+([run 31655822011](https://github.com/nmokey/perpetuals-carry-strategy/actions/runs/31655822011)).
+The Linux legs mattered most: the project had only ever been compiled by AppleClang on arm64, and
+it builds clean under GCC too. M0's acceptance criteria are now enforced per push rather than
+verified once by hand.
 
 ### M0 re-verified from a clean clone
 

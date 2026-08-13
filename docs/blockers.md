@@ -20,12 +20,61 @@ downstream. This is the project's highest-risk dependency.
 not. Options are (a) record live websocket depth-diffs for weeks, (b) buy a range from a tick-data
 vendor, (c) approximate with free partial-depth snapshots.
 
-**Interim path.** Design doc recommends starting with (c) to unblock M2 onward immediately, while
-running (a) in parallel to accumulate true L2 for a later higher-fidelity pass. Neither has been
-started.
+**Interim path.** The design doc's recommendation — start with (c), run (a) in parallel — **does
+not survive contact with the data**: see B-005 for why (c) does not exist as described, and B-004
+for why (a) cannot be run against Binance from this location. Neither has been started.
 
-**Unblocked by.** A decision on OD-2, plus — if (a) — actually starting the recorder, since every
-day of delay is a day of lost data.
+**Unblocked by.** A decision on OD-2 made against the evidence in B-004/B-005 and
+`specs/M1/M1-T3-order-book-acquisition.md`, plus — if any recording-based option — actually
+starting the recorder, since every day of delay is a day of lost data.
+
+---
+
+### B-004 — Binance's REST/WS API is geo-blocked from this location; Bybit too
+
+**Blocks.** Any live capture or REST pull from Binance — most importantly M1-T3 option (a).
+Does **not** block M1-T1 or M1-T2.
+
+**Verified 2026-08-12.** `fapi.binance.com` returns `"Service unavailable from a restricted
+location according to 'b. Eligibility'"` for `/fapi/v1/fundingRate` and `/fapi/v1/depth`. Bybit's
+`api.bybit.com` returns a CloudFront country block. **OKX works** — `/api/v5/market/books` returns
+L2 levels with a `seqId`, and its funding history endpoint responds normally.
+
+`data.binance.vision` is S3-backed and **not** geo-blocked, so the historical archives (trades,
+aggTrades, klines, fundingRate, bookDepth) remain fully available. The split matters: Binance is
+the better source for *history* and an unavailable source for *live capture*, from this machine.
+
+**Unblocked by.** Choosing a venue for live capture (OKX is the working option), or accepting
+that live capture happens elsewhere. Note that using a VPN to reach a venue that has deliberately
+geo-blocked the user is a terms-of-service question, not just a technical workaround.
+
+---
+
+### B-005 — OD-2 option (c) does not exist in the form the design doc assumes
+
+**Blocks.** M1-T3, and it changes the *shape* of the OD-2 decision rather than just its cost.
+
+**Verified 2026-08-12** by downloading and inspecting the actual files. See
+`specs/M1/M1-T3-order-book-acquisition.md` for the evidence in full.
+
+- `bookDepth` is **not** an order book: cumulative depth at 12 fixed percentage bands (±0.2, ±1..5%)
+  from mid, sampled ~2,628×/day at irregular ~30s intervals, no `update_id`, no per-level prices.
+  It cannot drive a book walk and cannot exercise the M2 replayer design at all.
+- `bookTicker` (L1) **was discontinued**: available 2023-05-16 → 2024-03-30, 404 from 2024-04-01.
+
+So "free partial-depth snapshots, immediately available" is really "coarse percentage buckets, or
+two-year-stale L1". The design doc's recommended interim path — start with (c) to unblock M2 —
+does not work, because there is nothing for M2 to replay.
+
+**Consequence.** M1-T3's acceptance criterion ("book state reconstructable at any timestamp,
+validated against a reference snapshot") is **unsatisfiable under (c)**. Choosing (c) means
+rewriting that criterion and re-scoping M2, which removes most of the C++ systems content the
+milestone ordering treats as independently demonstrable (R3).
+
+**Unblocked by.** An OD-2 decision made against this evidence. A fourth option not in the design
+doc — run the whole project on OKX, recording true L2 live — is now the most direct path to the
+stated criterion. Recommendation: **start an OKX recorder now regardless**, since it is the only
+option whose cost is measured in elapsed time, and it is discardable at no loss.
 
 ---
 
