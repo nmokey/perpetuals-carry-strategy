@@ -1,0 +1,27 @@
+# Local Parquet storage -- data is re-downloadable via the M1 ingestion scripts.
+/data/
+
+# Build artifacts
+/build/
+*.so
+*.dylib
+*.o
+*.a
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+_deps/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/

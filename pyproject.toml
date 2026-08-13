@@ -1,0 +1,54 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "perpcarry"
+version = "0.1.0"
+description = "Funding-rate-aware execution cost analysis for crypto perpetual futures"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Ryan Zheng" }]
+dependencies = [
+    "duckdb>=1.1",
+    "matplotlib>=3.9",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "polars>=1.0",
+    "pyarrow>=17",
+    "scikit-learn>=1.5",
+    "statsmodels>=0.14",
+]
+
+[dependency-groups]
+dev = [
+    "cmake>=3.22",
+    "ninja>=1.11",
+    "pybind11>=2.13",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.scikit-build]
+cmake.version = ">=3.20"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["python/perpcarry"]
+# Automatic rebuild-on-import is off: the isolated build env that produced the CMake
+# cache is torn down after `uv sync`, so its toolchain paths are stale by import time.
+# Rebuild explicitly with `uv sync --reinstall-package perpcarry` after changing cpp/.
+editable.rebuild = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+src = ["python", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.uv]
+# The C++ extension is rebuilt via scikit-build-core; keep the project editable.
+package = true
