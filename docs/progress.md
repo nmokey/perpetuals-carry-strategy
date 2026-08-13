@@ -8,7 +8,7 @@ Milestone status at a glance:
 
 | Milestone | Status |
 |---|---|
-| M0 — Scaffolding & environment | **Complete** (2026-08-12) |
+| M0 — Scaffolding & environment | **Complete** (2026-08-12), pending first green CI run |
 | M1 — Data acquisition | Not started (blocked: B-001) |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
@@ -23,6 +23,34 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-12
+
+### CI pipeline added (M0-T5)
+
+`.github/workflows/ci.yml`: two jobs — `python` (ruff, format check, pytest) and `cpp` (standalone
+CMake configure/build/`ctest`) — each across `ubuntu-latest` and `macos-latest`. Rationale and the
+tiering plan are in design doc Section 4.9; decisions in D-007.
+
+Every step verified by running its exact command locally before commit. That caught a real defect:
+`FETCHCONTENT_BASE_DIR` set as a workflow `env:` var does nothing, because CMake reads it only
+from `-D`. As written it would have run green forever while caching an empty directory. Now passed
+explicitly at configure time and confirmed to populate `.fetchcontent/`. Lesson saved as C11.
+
+Also narrowed `requires-python` from `>=3.11` to `>=3.12` (D-008) — 3.11 was an untested claim —
+and raised the CMake Python floor to match. `uv sync --locked` caught the stale lockfile
+immediately, which is the check working as designed.
+
+**Not yet true:** CI has never run. The ubuntu leg is entirely unproven; see `blockers.md`.
+
+### M0 re-verified from a clean clone
+
+Prompted by a challenge to the "M0 complete" claim, all four criteria were re-run against a fresh
+`git clone` rather than the working tree: build 114/114, `import perpcarry` + `perpcarry_cpp` OK,
+`ctest` 1/1, pytest 9/9, ruff clean. Criteria hold as written.
+
+Caveats surfaced in the process, now addressed or logged: the M0-T4 partitioned round-trip test
+coerces dtypes unnecessarily (dtypes do survive; only column order changes), so it is weaker than
+it should be — still outstanding. The C++ core remains a deliberate stub (C5). And "passes" meant
+"passed once, on one Mac" — which is what M0-T5 exists to fix.
 
 ### Agent-orchestration docs scaffolded
 

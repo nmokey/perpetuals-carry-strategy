@@ -159,6 +159,30 @@ Combines the impact model (expected cost) and funding model (expected + uncertai
 ### 4.8 Reporting & Analysis
 Capacity curves, BTC-vs-altcoin comparison, sensitivity sweeps, written summary.
 
+### 4.9 Continuous Integration
+GitHub Actions runs, on every push and pull request, the lint/pytest suite and the standalone
+CMake + `ctest` build, across Linux and macOS. Two build paths exist (the scikit-build-core wheel
+build and the standalone CMake build, see `decisions.md` D-001) and CI is what keeps them from
+drifting apart; the Linux leg is also the only thing compiling this project with anything other
+than AppleClang.
+
+CI is tiered as the project grows, because the expensive checks cannot live in the per-PR path:
+
+| Tier | Contents | Trigger |
+|---|---|---|
+| Per-PR | ruff, pytest, `ctest`, both OSes | push / PR |
+| Nightly | ThreadSanitizer queue stress (M3-T2), full backtests (M8), reproducibility gate | schedule |
+
+The **reproducibility gate** is the important one: a scheduled end-to-end re-run that fails if
+headline results move without a corresponding commit. That is the automated form of this
+project's central rigor claim, and the same reasoning applies to the look-ahead poisoning test
+(M7-T3) and the fixed-seed determinism checks — invariants that are asserted once and never
+re-checked decay silently.
+
+Network-dependent tests (the M1 ingestion pulls) are marked and deselected by default. CI must
+never depend on a live exchange endpoint: it makes red builds ambiguous, and under OD-2 option (b)
+it risks caching licensed vendor data in CI artifacts.
+
 ---
 
 ## 5. Milestones & Task Breakdown
@@ -173,6 +197,7 @@ Each milestone can, in principle, stop and produce a coherent deliverable on its
 | M0-T2 | C++ test framework setup | Catch2 (or GoogleTest) integrated | One trivial passing C++ unit test runs via `ctest` | M0-T1 |
 | M0-T3 | Python test/lint setup | pytest + ruff configured | One trivial passing pytest test; `ruff check` passes on empty scaffold | M0-T1 |
 | M0-T4 | Parquet I/O utility | Read/write helper for tabular data | Round-trip test: write a sample DataFrame, read it back, assert equality | M0-T1 |
+| M0-T5 | Continuous integration | GitHub Actions workflow running both build paths on Linux and macOS | Lint, pytest, and `ctest` all run per push/PR on both platforms; a deliberately broken commit fails the run | M0-T2, M0-T3 |
 
 ### M1 — Data Acquisition Pipeline
 
@@ -345,7 +370,7 @@ Status: OPEN, leaning walk-forward.
 **OD-13 — Build tooling**
 *Affects: M0.*
 Recommendation: CMake + pybind11, Catch2 for C++ tests, pytest + ruff for Python, `uv` for environment management (consistent with existing workflow conventions).
-Status: **RESOLVED 2026-08-12 at M0.** Adopted as recommended, with implementation details in `decisions.md` D-001 (scikit-build-core backend), D-002 (CMake/Ninja as venv dev deps), D-003 (`editable.rebuild` off), D-005 (Python pinned to 3.12).
+Status: **RESOLVED 2026-08-12 at M0.** Adopted as recommended, with implementation details in `decisions.md` D-001 (scikit-build-core backend), D-002 (CMake/Ninja as venv dev deps), D-003 (`editable.rebuild` off), D-005 (Python pinned to 3.12), D-007 (GitHub Actions CI, Section 4.9), D-008 (`requires-python` narrowed to `>=3.12`).
 
 **OD-14 — Data storage format**
 *Affects: M0-T4, M1.*
@@ -361,6 +386,7 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 - Backtest produces a concrete, defensible capacity finding: a specific size (or range) at which net-of-cost P&L crosses zero, for at least one symbol.
 - SPSC queue throughput benchmark documented with a specific events/sec figure.
 - Look-ahead bias explicitly tested and ruled out via the M7-T3 poisoning test — this artifact alone directly answers a gap called out in prior resume feedback.
+- The rigor artifacts are *enforced*, not just written once: the look-ahead poisoning test, fixed-seed determinism checks, and both build paths run in CI rather than depending on someone remembering to re-run them.
 - Project is stoppable and coherent after M4 (systems core), after M7 (full research pipeline), or after M9 (polished writeup) — no single point of total failure.
 
 ## 8. Risks & Mitigations
@@ -372,11 +398,16 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 | R3 — Scope creep from trying to hit every technique at once | Milestones ordered so M0-M4 alone is a complete, demonstrable systems project; M5-M10 add research depth incrementally and can be paused after any milestone |
 | R4 — pybind11 interop overhead undermines the "low-latency" story | Keep the C++/Python boundary at the pipeline level (post-SPSC-queue), not per-tick; benchmark and report interop overhead honestly rather than hand-waving around it |
 | R5 — Altcoin liquidity ranking becomes stale by the time M8 runs | Defer symbol selection (OD-3) to build time rather than locking it in the design doc |
+| R6 — Rigor claims (no look-ahead, determinism) silently decay after the commit that introduced them | Encode each as a CI check rather than a one-off manual verification (Section 4.9); a claim nothing re-runs is a claim about the past |
+| R7 — CI becomes flaky or slow and stops being read | Network-dependent and long-running checks stay out of the per-PR tier; per-PR CI must remain fast enough that a red build is always believed |
 
 ## 9. Repository Structure
 
 ```
 perpcarry/
+├── .github/
+│   └── workflows/
+│       └── ci.yml         # lint + pytest + ctest, Linux & macOS
 ├── cpp/
 │   ├── include/perpcarry/
 │   │   ├── order_book.hpp
@@ -418,8 +449,11 @@ perpcarry/
 ## 10. Tech Stack Summary
 
 - **C++17/20**, CMake, pybind11, Catch2, ThreadSanitizer (for M3-T2 concurrency validation)
-- **Python 3.11+**, managed via `uv`; pandas/polars for data wrangling; statsmodels/scikit-learn for regression; PyMC (optional, M6 stretch) or hand-rolled conjugate updating for Bayesian inference; matplotlib/plotly for reporting
+- **Python 3.12+** (narrowed from 3.11+ to what CI actually exercises — see D-008), managed via `uv`; pandas/polars for data wrangling; statsmodels/scikit-learn for regression; PyMC (optional, M6 stretch) or hand-rolled conjugate updating for Bayesian inference; matplotlib/plotly for reporting
 - **Storage:** Parquet via PyArrow, DuckDB as an optional query layer
+- **CI:** GitHub Actions — ruff + pytest + `ctest` on Linux and macOS per push/PR; heavy checks
+  (TSan, full backtests, reproducibility gate) deferred to a nightly tier. CMake and Ninja are
+  installed as venv dev dependencies rather than system packages, so runners need only `uv`.
 
 ## 11. Glossary
 

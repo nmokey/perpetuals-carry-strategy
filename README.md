@@ -1,5 +1,7 @@
 # PerpCarry
 
+[![CI](https://github.com/nmokey/perpetuals-carry-strategy/actions/workflows/ci.yml/badge.svg)](https://github.com/nmokey/perpetuals-carry-strategy/actions/workflows/ci.yml)
+
 Funding-rate-aware execution cost analysis for crypto perpetual futures.
 
 **Research question:** for a given perpetual futures market, does the funding-rate carry edge
@@ -54,3 +56,14 @@ uv run ctest --test-dir build/dev -R smoke   # one test by name
 
 The C++ test suite uses Catch2, fetched at configure time via CMake `FetchContent` (first
 configure needs network access).
+
+## CI
+
+GitHub Actions runs both build paths on every push and pull request, across Linux and macOS:
+
+- **`python`** — `uv sync --locked` (which compiles the extension), then ruff and pytest
+- **`cpp`** — standalone CMake configure/build, then `ctest`
+
+The commands are the same ones listed above, so a green CI run means the local instructions work.
+Heavier checks (ThreadSanitizer, full backtests, a reproducibility gate) are planned for a nightly
+tier — see design doc Section 4.9.

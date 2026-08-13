@@ -85,6 +85,9 @@ importable Python extension").
 **Decision.** `.python-version` pins 3.12 for wheel coverage across the scientific stack;
 `requires-python` stays `>=3.11`.
 
+**Superseded in part by D-008** (2026-08-12): `requires-python` narrowed to `>=3.12`. The 3.12
+pin itself stands.
+
 **Revisit when.** The scientific stack has settled 3.13/3.14 wheels and there is a reason to move.
 
 ---
@@ -98,3 +101,55 @@ PyMC would only appear if the optional M9 MCMC addendum is actually pursued.
 
 **Why.** Keeps the rolling backtest cheap enough to re-run at every walk-forward step, and keeps a
 heavy dependency out of the environment until it is earned.
+
+---
+
+## D-007 — GitHub Actions CI, two jobs, two platforms (2026-08-12)
+
+**Context.** M0's acceptance criteria were verified once by hand, on one machine. Nothing
+re-checked them, and nothing exercised the standalone CMake path at all.
+
+**Decision.** `.github/workflows/ci.yml` runs two jobs — `python` (ruff, `ruff format --check`,
+pytest, via `uv sync --locked` which also compiles the extension) and `cpp` (standalone CMake
+configure/build/`ctest`) — each on `ubuntu-latest` and `macos-latest`. Design rationale is written
+up in design doc Section 4.9.
+
+**Why this shape.**
+
+- Both build paths run, because D-001 created two of them and only CI can keep them in step.
+- Ubuntu is included because every line so far has only been compiled by AppleClang on arm64.
+- `uv sync --locked` fails when `pyproject.toml` changed without re-locking, keeping `uv.lock`
+  honest. This fired immediately on the D-008 change, as intended.
+- CMake/Ninja being venv dev deps (D-002) means runners install nothing beyond `uv`.
+- Catch2 is redirected to a stable `FETCHCONTENT_BASE_DIR` so `actions/cache` has something at a
+  fixed path to cache. **Note:** CMake does not read that variable from the environment — it must
+  be passed with `-D` at configure time. An env-var-only version silently cached nothing.
+
+**Deferred.** Nightly tier (TSan for M3-T2, full backtests for M8, reproducibility gate) is
+specified in Section 4.9 but not built — there is nothing to run yet, and scaffolding CI for
+code that does not exist is convention C5 applied to infrastructure.
+
+**Cost.** Repo is public, so Actions minutes are free on all runners including macOS. Jobs carry a
+15-minute timeout so a hang fails fast rather than sitting on a runner.
+
+**Accepted risk.** Third-party actions are pinned to major tags (`actions/checkout@v4`,
+`astral-sh/setup-uv@v6`, `actions/cache@v4`) rather than commit SHAs, so a compromised tag would
+execute in CI. Acceptable here: the workflow has `permissions: contents: read`, holds no secrets,
+and publishes nothing. Revisit if CI ever gains a token, a secret, or publish rights — in
+particular if OD-2 resolves to a paid vendor whose API key lands in repository secrets.
+
+---
+
+## D-008 — `requires-python` narrowed to `>=3.12` (2026-08-12)
+
+**Context.** The project declared `>=3.11` while `.python-version` pinned 3.12. Nothing had ever
+run on 3.11 — the claim was untested.
+
+**Decision.** Narrow `requires-python` to `>=3.12` and raise the CMake `find_package(Python ...)`
+floor to match, rather than adding a 3.11 leg to the CI matrix.
+
+**Why.** Nothing in the project needs 3.11, so supporting it means maintaining a matrix leg to
+defend a capability nobody wants. Prefer a narrow claim that is true to a broad one that is
+unverified. Supersedes the `>=3.11` half of D-005.
+
+**Revisit when.** Someone actually needs to run this on 3.11.

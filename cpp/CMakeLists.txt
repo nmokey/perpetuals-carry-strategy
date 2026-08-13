@@ -11,12 +11,12 @@ set_target_properties(perpcarry_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(PERPCARRY_BUILD_PYTHON)
   if(SKBUILD)
-    find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development.Module)
+    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
     find_package(pybind11 CONFIG REQUIRED)
   else()
     # Standalone builds: locate pybind11 inside whatever interpreter is active
     # (the uv-managed .venv), since it is only a dev dependency there.
-    find_package(Python 3.11 QUIET COMPONENTS Interpreter Development.Module)
+    find_package(Python 3.12 QUIET COMPONENTS Interpreter Development.Module)
     if(Python_FOUND AND NOT pybind11_DIR)
       execute_process(
         COMMAND "${Python_EXECUTABLE}" -m pybind11 --cmakedir

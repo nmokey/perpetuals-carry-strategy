@@ -146,3 +146,35 @@ paid tick-data vendor).
 
 **How to apply.** Point tests at `tmp_path` or override `PERPCARRY_DATA_ROOT`; never write test
 fixtures into `data/`.
+
+---
+
+## C10 — A rigor claim that CI does not run is a claim about the past
+
+**Rule.** Every invariant the project asserts — no look-ahead, fixed-seed determinism, both build
+paths working — is encoded as a check CI runs, not as a one-off manual verification. Keep the
+per-PR tier fast and network-free; heavy or network-dependent checks go to the nightly tier.
+
+**Why.** M0's criteria were verified once by hand on one machine, and nothing would have caught a
+regression. The project's entire value proposition is demonstrated rigor; an unenforced checklist
+is exactly the thing a skeptical reviewer discounts. Equally, CI that is slow or flaky stops being
+believed, which is the same failure in a different costume (design doc R6, R7).
+
+**How to apply.** Mark network tests (`@pytest.mark.network`) and deselect them by default. When
+adding a test that demonstrates an invariant, confirm it runs in the per-PR tier — or, if too
+slow, that it is wired into nightly rather than nowhere.
+
+---
+
+## C11 — Verify CI steps locally before trusting them
+
+**Rule.** Run each workflow step's exact command locally before committing the workflow. Do not
+reason about whether a step works.
+
+**Why.** Writing `FETCHCONTENT_BASE_DIR` as a workflow `env:` var looked correct and would have
+passed CI green forever while caching an empty directory — CMake does not read that variable from
+the environment, only from `-D`. A green run is not evidence that a step does what it claims;
+only running it and inspecting the result is.
+
+**How to apply.** Export the same variables the workflow sets, run the commands verbatim, and
+check the *side effects* (did the cache directory actually get populated?), not just the exit code.

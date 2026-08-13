@@ -79,7 +79,18 @@ Not blocking yet; will bite at the milestone named.
   and say which in the spec.
 
 - **ThreadSanitizer is not yet wired into the build.** M3-T2's acceptance criterion requires a
-  TSan-clean stress run; there is currently no sanitizer build configuration.
+  TSan-clean stress run; there is currently no sanitizer build configuration, and no nightly CI
+  tier to run it in (design doc Section 4.9 specifies the tier; it is not built).
+
+- **CI has never actually run.** The workflow was verified by executing each step's exact command
+  locally on macOS, but no GitHub Actions run exists yet. The Linux leg in particular is
+  unproven — this project has only ever been compiled by AppleClang on arm64, so the first
+  ubuntu run may well surface a missing include or a warning difference. Expect to fix something
+  on the first push.
+
+- **Network tests at M1 will need marking before they exist.** The ingestion pulls hit live
+  exchange endpoints. They must be `@pytest.mark.network` and deselected by default *from the
+  first one written*, or CI becomes flaky and a red build stops being believed (C10, R7).
 
 ---
 

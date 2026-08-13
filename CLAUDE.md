@@ -13,7 +13,7 @@ background reading:
 
 | File | What it is | When to touch it |
 |---|---|---|
-| `docs/conventions.md` | Accumulated lessons, C1–C9 | **Read before starting work; apply every rule.** Append a new entry whenever a lesson is learned or reversed |
+| `docs/conventions.md` | Accumulated lessons, C1–C11 | **Read before starting work; apply every rule.** Append a new entry whenever a lesson is learned or reversed |
 | `docs/progress.md` | Dated log of what was verified | Add a dated entry (`YYYY-MM-DD`, newest first) as part of finishing work — not as a later cleanup pass |
 | `docs/blockers.md` | What's blocked, and the interim path | Check before starting a milestone; log new blockers as they appear |
 | `docs/decisions.md` | OD-N resolution status + D-NNN build decisions | Log any decision the design doc didn't specify; when resolving an OD, update the design doc's Status line too |
@@ -42,13 +42,19 @@ uv run ctest --test-dir build/dev --output-on-failure
 uv run ctest --test-dir build/dev -R smoke     # single C++ test by name
 ```
 
+CI (`.github/workflows/ci.yml`) runs exactly these commands — `uv sync --locked`, ruff, pytest in
+one job; standalone CMake + `ctest` in another — on both `ubuntu-latest` and `macos-latest`. To
+reproduce a CI failure locally, run the step's command verbatim; if you change a workflow step,
+run it locally first (convention C11). Note that `uv sync --locked` fails when `pyproject.toml`
+changed without `uv lock`, so re-lock as part of any dependency change.
+
 Toolchain notes worth knowing before debugging a build:
 
 - CMake and Ninja are **dev dependencies inside `.venv`**, not system installs — hence the `uv run` prefix on every CMake command.
 - scikit-build-core's editable rebuild-on-import is deliberately **off** (`editable.rebuild = false` in `pyproject.toml`). Its CMake cache points into the ephemeral build-isolation environment, which uv tears down after the sync, so imports fail with a stale ninja path. Rebuild explicitly instead.
 - The standalone (non-wheel) CMake build finds pybind11 by shelling out to `python -m pybind11 --cmakedir` against the active interpreter; outside the venv it silently skips the extension module and builds only the core plus tests.
 - Catch2 v3.7.1 is pulled at configure time via `FetchContent`, so the first configure needs network access.
-- Python is pinned to 3.12 (`.python-version`) for wheel coverage; the project declares `>=3.11`.
+- Python is pinned to 3.12 (`.python-version`), and `requires-python` is `>=3.12` — narrowed from `>=3.11`, which nothing had ever tested (D-008). The CMake `find_package(Python ...)` floor matches; keep the three in step.
 
 ## Working from the design doc
 

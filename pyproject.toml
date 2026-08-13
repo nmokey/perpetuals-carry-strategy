@@ -7,7 +7,9 @@ name = "perpcarry"
 version = "0.1.0"
 description = "Funding-rate-aware execution cost analysis for crypto perpetual futures"
 readme = "README.md"
-requires-python = ">=3.11"
+# Narrowed from >=3.11 to what CI actually exercises; 3.11 support was an
+# untested claim. See decisions.md D-008.
+requires-python = ">=3.12"
 authors = [{ name = "Ryan Zheng" }]
 dependencies = [
     "duckdb>=1.1",

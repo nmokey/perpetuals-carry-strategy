@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push supersedes the first; don't burn runners on stale commits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Stable location for Catch2 so it can be cached across runs, rather than
+  # landing inside the (uncached) CMake binary dir. CMake does not read this from
+  # the environment -- it must be passed to configure with -D, below.
+  FETCHCONTENT_DIR: ${{ github.workspace }}/.fetchcontent
+
+jobs:
+  # Exercises the scikit-build-core path: `uv sync` compiles perpcarry_cpp into
+  # the wheel, so a Python-side failure here can equally mean a C++ build break.
+  python:
+    name: python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # --locked fails if pyproject.toml changed without re-locking, which keeps
+      # the committed uv.lock honest.
+      - name: Sync environment (builds the extension)
+        run: uv sync --locked
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest
+
+  # Exercises the standalone CMake path (core + Catch2). Nothing else covers it,
+  # so without this job it silently rots -- see decisions.md D-001.
+  cpp:
+    name: cpp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # CMake and Ninja are venv dev dependencies (convention C7), so this is the
+      # only toolchain install the runner needs.
+      - name: Sync environment
+        run: uv sync --locked
+
+      - name: Cache Catch2 source
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FETCHCONTENT_DIR }}
+          key: fetchcontent-${{ runner.os }}-${{ hashFiles('cpp/tests/CMakeLists.txt') }}
+
+      - name: Configure
+        run: uv run cmake -S . -B build/ci -G Ninja -D FETCHCONTENT_BASE_DIR="${{ env.FETCHCONTENT_DIR }}"
+
+      - name: Build
+        run: uv run cmake --build build/ci
+
+      - name: Test
+        run: uv run ctest --test-dir build/ci --output-on-failure
