@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Ryan Zheng" }]
 dependencies = [
     "duckdb>=1.1",
+    "httpx>=0.27",
     "matplotlib>=3.9",
     "numpy>=1.26",
     "pandas>=2.2",
@@ -42,7 +43,12 @@ editable.rebuild = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# Network tests are deselected by default (convention C10): CI must never depend on a
+# live archive or vendor endpoint. Run them explicitly with `-m network`.
+addopts = "-ra -m 'not network'"
+markers = [
+    "network: hits a real external service; deselected by default",
+]
 
 [tool.ruff]
 line-length = 100

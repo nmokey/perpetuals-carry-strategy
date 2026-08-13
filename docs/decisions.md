@@ -198,3 +198,22 @@ the vendor's instruments API is paid-only).
 
 **Why they were missed.** Both are the kind of dependency that is invisible until you try to write
 the code — which is the argument for writing specs before implementing, not after.
+
+---
+
+## D-011 — `httpx` as the HTTP client; cache under the data root (2026-08-12)
+
+**Context.** M0-T6 needed a client; the project had none.
+
+**Decision.** `httpx`, with the download cache at `data/.cache/` via `download.cache_dir()`.
+
+**Why.** `httpx` streams cleanly, has sane timeout defaults, and is well maintained. `requests`
+would also have worked — this is not load-bearing, and is recorded only so it is not
+re-litigated. The cache goes under the data root because that is already gitignored and already
+relocatable via `PERPCARRY_DATA_ROOT`; re-downloading a 449 MB book day on every run is slow
+enough that people start commenting out the download.
+
+**Retry policy.** Transport errors and `{408, 425, 429, 5xx}` are retried with linear backoff;
+every other 4xx fails immediately. This matters for the vendor: a 401 means "not the first of the
+month" and a 404 means "no archive for that day" — both are caller errors, and retrying them
+just makes a mistake slower to discover.

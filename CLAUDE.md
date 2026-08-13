@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Milestone **M0 (scaffolding) is complete**; M1 onward is unimplemented. What exists is the build system, the Python package skeleton, the Parquet I/O layer (M0-T4), and a stub C++ core whose only job is to prove the toolchain works end to end. `cpp/` contains a `version()` function and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue`, and the impact simulator are all still to be written (M2–M4), as are all the `python/perpcarry/{ingestion,models,strategy,reporting}` modules.
+Milestone **M0 is complete (T1–T6)**; M1 is specced but unimplemented. What exists is the build system, the Python package skeleton, the Parquet I/O layer (M0-T4), the download/extract helpers (M0-T6), and a stub C++ core whose only job is to prove the toolchain works end to end. `cpp/` contains a `version()` function and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue`, and the impact simulator are all still to be written (M2–M4), as are the `models/`, `strategy/`, and `reporting/` packages and every M1 fetcher.
+
+**Data sourcing is settled** (D-009, and `docs/external-dependencies-audit.md`): Binance USD-M throughout — trades/funding/klines from the `data.binance.vision` S3 archive, L2 order book from the Tardis.dev free tier (first day of each month). **No venue API is used or usable** — `fapi.binance.com` and Bybit are geo-blocked from this location. Don't write code that calls one.
 
 ## Standing steering — read these first
 
@@ -32,6 +34,7 @@ uv sync                                # env + build extension (first run create
 uv run pytest                          # Python suite
 uv run pytest tests/test_storage.py    # single file
 uv run pytest -k round_trip            # single test by name
+uv run pytest -m network               # the network tests, deselected by default
 uv run ruff check . && uv run ruff format .
 
 uv sync --reinstall-package perpcarry  # rebuild perpcarry_cpp after editing cpp/

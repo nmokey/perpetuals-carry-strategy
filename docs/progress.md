@@ -8,8 +8,8 @@ Milestone status at a glance:
 
 | Milestone | Status |
 |---|---|
-| M0 — Scaffolding & environment | **Complete** (2026-08-12), CI green |
-| M1 — Data acquisition | Not started (blocked: B-001) |
+| M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
+| M1 — Data acquisition | Specced, not started. Unblocked — OD-1/OD-2 resolved |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,30 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-12
+
+### M0-T6 implemented — the ingestion layer can now actually download
+
+`python/perpcarry/ingestion/download.py`: streamed `fetch` with bounded retry, SHA-256
+verification against the archive's published `.CHECKSUM`, `cached_fetch`, and `extract_csv` for
+zip/gzip/plain. Added `httpx` (D-011) — the project previously had no HTTP client at all, which
+blocked every M1 task. 18 tests; suite now 32 offline + 1 network.
+
+Network tests are marked and **deselected by default** (`addopts = "-ra -m 'not network'"`), so CI
+never depends on a live archive (C10). The one network test downloads a real funding archive,
+verifies its published checksum, and asserts the 90-row/8h shape — it passes.
+
+**Mutation testing found a decorative test.** `test_no_partial_file_survives_a_failure` used an
+HTTP 500, which fails *before* any bytes are written — so no `.part` file ever existed and the test
+passed even with the cleanup code deleted. It asserted nothing about the behaviour it was named
+for. Replaced with a mid-stream failure that streams real bytes and then drops the connection.
+
+Final result: **6/6 injected defects detected**, each by exactly one precisely-named test — better
+targeting than the storage suite, where one defect lights up five tests.
+
+Two notes for M1: the vendor publishes no `.CHECKSUM` files (404), so book downloads need a
+different integrity signal — gzip inflation succeeding is the obvious candidate. And the mutation
+harness must back up to a scratch copy rather than `git checkout` when the file under test is still
+untracked; the first run silently accumulated all five defects instead of reverting.
 
 ### Design adjusted to the audit; OD-1, OD-2, OD-11 resolved
 

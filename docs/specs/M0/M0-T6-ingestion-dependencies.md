@@ -1,7 +1,7 @@
 # M0-T6 — Ingestion dependencies
 
 **Milestone:** M0
-**Status:** Draft
+**Status:** **Complete** (2026-08-12)
 **Depends on:** M0-T4 (complete)
 **Design doc:** Section 4.1, Section 10
 
@@ -48,11 +48,29 @@ Proposed for the design doc Section 5 M0 table:
 | 3 | A transient failure (first attempt errors, second succeeds) is retried; a permanent one raises with the URL in the message | same |
 | 4 | `cached_fetch` performs no second request when a verified copy exists | same |
 | 5 | Downloading a real archive works end to end | same, marked `network`, deselected by default |
-| 6 | A large file streams rather than buffering — asserted by patching the writer and checking it is called more than once | same |
+| 6 | A large file streams rather than buffering | same |
 
 Test 2 is the one that matters in practice: a truncated download that silently persists is
 indistinguishable from a thin trading day, which is exactly the class of defect M1-T4 exists to
 catch and would rather not have to.
+
+## As built
+
+Delivered as `python/perpcarry/ingestion/download.py` with 18 tests (17 offline + 1 `network`).
+
+Two implementation notes worth carrying forward:
+
+- **Streaming is asserted via an `on_chunk` callback** rather than by patching the writer. The
+  callback is genuinely useful (progress reporting on ~449 MB files) and makes the test a
+  behavioural assertion instead of a mock-shaped one.
+- **A status-only failure does not exercise the partial-file path.** The original test used a
+  500, which raises *before* any bytes are written, so no `.part` file ever existed — it passed
+  even with the cleanup deleted. Mutation testing caught this; the test now streams real bytes and
+  then fails mid-transfer. See convention C12: the first version of that test was decorative.
+
+**Verified by mutation, 6/6 defects detected**, each by exactly one precisely-named test: partial
+file left after mid-stream failure, 4xx retried, checksum compared case-sensitively, cache trusted
+without re-verifying, body buffered whole, bad download kept after failed verification.
 
 ## Out of scope
 
@@ -63,7 +81,12 @@ catch and would rather not have to.
 
 ## Open questions
 
-**Q1 — where does the download cache live?** Suggest `data/.cache/` so it is already gitignored and
-sits beside the data it derives, with `PERPCARRY_DATA_ROOT` continuing to relocate everything.
+**Q1 — RESOLVED.** Cache lives at `data/.cache/` via `download.cache_dir()`, already gitignored and
+relocatable through `PERPCARRY_DATA_ROOT`.
 
-**Q2 — `httpx` or `requests`?** Recommend `httpx`; record the choice as a D-entry either way.
+**Q2 — RESOLVED.** `httpx`, recorded as D-011.
+
+**Q3 — new, deferred.** The Tardis free tier publishes **no** `.CHECKSUM` files (verified: 404), so
+book downloads cannot be integrity-checked the way archive downloads can. `fetch_checksum` returns
+`None` there rather than failing. M1-T3 will need a different integrity signal — gzip decompression
+succeeding end-to-end is the obvious candidate, since a truncated `.gz` fails to inflate.
