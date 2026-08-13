@@ -345,12 +345,12 @@ Status: OPEN, leaning walk-forward.
 **OD-13 — Build tooling**
 *Affects: M0.*
 Recommendation: CMake + pybind11, Catch2 for C++ tests, pytest + ruff for Python, `uv` for environment management (consistent with existing workflow conventions).
-Status: Low-risk, essentially resolved — confirm at M0.
+Status: **RESOLVED 2026-08-12 at M0.** Adopted as recommended, with implementation details in `decisions.md` D-001 (scikit-build-core backend), D-002 (CMake/Ninja as venv dev deps), D-003 (`editable.rebuild` off), D-005 (Python pinned to 3.12).
 
 **OD-14 — Data storage format**
 *Affects: M0-T4, M1.*
 Recommendation: Parquet via PyArrow as the storage format; DuckDB as an optional ad hoc SQL layer on top, no persistent server needed.
-Status: Low-risk, essentially resolved.
+Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partitioning by `symbol`/`date`, with the data root overridable via `PERPCARRY_DATA_ROOT`.
 
 ---
 

@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Milestone **M0 (scaffolding) is complete**; M1 onward is unimplemented. What exists is the build system, the Python package skeleton, the Parquet I/O layer (M0-T4), and a stub C++ core whose only job is to prove the toolchain works end to end. `cpp/` contains a `version()` function and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue`, and the impact simulator are all still to be written (M2–M4), as are all the `python/perpcarry/{ingestion,models,strategy,reporting}` modules.
 
+## Standing steering — read these first
+
+`docs/` carries the state that persists across sessions. Treat them as instructions, not
+background reading:
+
+| File | What it is | When to touch it |
+|---|---|---|
+| `docs/conventions.md` | Accumulated lessons, C1–C9 | **Read before starting work; apply every rule.** Append a new entry whenever a lesson is learned or reversed |
+| `docs/progress.md` | Dated log of what was verified | Add a dated entry (`YYYY-MM-DD`, newest first) as part of finishing work — not as a later cleanup pass |
+| `docs/blockers.md` | What's blocked, and the interim path | Check before starting a milestone; log new blockers as they appear |
+| `docs/decisions.md` | OD-N resolution status + D-NNN build decisions | Log any decision the design doc didn't specify; when resolving an OD, update the design doc's Status line too |
+| `docs/north_star.md` | The research question and what invalidates it | Consult when a tradeoff feels ambiguous; rarely edited |
+| `docs/specs/` | One spec per Section 5 task, `M<n>/<TASK-ID>-<slug>.md` | Write just-in-time from `TEMPLATE.md`, at most one milestone ahead |
+
+Two of those conventions govern how this session operates and are worth restating here:
+
+- **C1 — never take a remote action without explicit approval.** No push, PR, issue, tag, release, or write to any external service without asking and getting a yes. Read-only remote calls (`git fetch`, `git ls-remote`) are fine. Approval is per-action, never standing. Commit locally freely; then ask.
+- **C2 — adversarial self-audit before requesting a push.** Read the actual diff, verify every passing-test claim was actually run this session, check each convention against the diff, confirm design-doc acceptance criteria are genuinely met, and anticipate what a skeptical reviewer would flag. Report what the audit found — including anything it did not clear — then ask.
+
 ## Commands
 
 ```bash
@@ -40,13 +59,7 @@ Two rules follow from this:
 1. **Check the task's dependencies before implementing.** Section 5 tables list `Depends On` for every task, and several tasks are blocked on an *open design decision* (bolded, e.g. "**OD-2 resolved**"). If you are asked to implement a task whose blocking OD is still `OPEN` in Section 6, surface that first — each OD has a documented recommendation/default that can be adopted, but the choice should be explicit, and the doc's Status line updated when it is made.
 2. **Acceptance criteria are the spec.** Each task row states a concrete acceptance criterion (e.g. "no gaps in `trade_id` sequence", "withholding future data does not change historical outputs"). Implement against those, and add the test the criterion implies.
 
-Known gaps in the doc, worth resolving as the affected milestones come up rather than silently working around:
-
-- **No C++-side Parquet reader is specified.** Section 2 has the C++ core consuming the Parquet that Python writes, but Section 10's tech stack lists no Arrow C++ / Parquet dependency. Either add Arrow C++ at M2/M3, or have Python feed the replayer through the pybind11 boundary (which fits the pipeline-level-boundary rule better).
-- **Section 3.2's book schema assumes diffs** (`update_id` sequence numbers), which only exist under OD-2 options (a)/(b). The recommended interim option (c), partial-depth snapshots, has no diff stream, so a snapshot-only path needs its own schema and a `BookReplayer` mode that ingests snapshots directly.
-- **A few dependency edges are tighter than necessary**: M2-T1 (a pure data structure) depends on M1-T4 (full data QA), and M4-T2 (time-sliced simulator) depends on M3-T2 (SPSC queue). Both can be developed and unit-tested against synthetic fixtures earlier; the dependency is real only for the validation-against-real-data half of the acceptance criteria.
-- **M7-T4 (fee/funding settlement accounting) sits after M7-T3 (backtest loop)**, though the loop's P&L needs it. Expect to build a minimal settlement model with T3 and refine it in T4.
-- **M1-T1's "no gaps in `trade_id`"** is venue-specific — on Binance aggTrades, IDs are aggregated and gaps are expected by design. Validate against the raw trade endpoint or relax the criterion to monotonicity.
+The doc has five known gaps — a missing C++-side Parquet reader, a book schema that assumes diffs the interim data source lacks, two over-tight dependency edges, a mis-sequenced fee/settlement task, and a venue-specific `trade_id` criterion. They are recorded with detail and interim paths in `docs/blockers.md`; read it before starting any milestone rather than rediscovering them.
 
 The highest-risk unresolved decision is **OD-2** (historical L2 order book data acquisition) — it gates M1-T3 and everything downstream. The doc's recommendation is to start with free partial-depth snapshots to unblock M2+, while recording live websocket depth-diffs in parallel for a later higher-fidelity pass.
 
