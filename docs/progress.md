@@ -9,7 +9,7 @@ Milestone status at a glance:
 | Milestone | Status |
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
-| M1 — Data acquisition | In progress — T1 complete; T2–T5 specced and ready |
+| M1 — Data acquisition | In progress — T1, T2 complete; T3–T5 specced and ready |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,43 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-12
+
+### M1-T2 complete — funding rate downloader
+
+`ingestion/fetch_funding.py`, reusing `binance_archive.py` and `download.py`. 28 tests (27 offline,
+1 network); suite now 90 offline + 3 network, all green. 10/10 mutations caught.
+
+Both fixtures are real archive months so the hard cases are genuine: `BTCUSDT` 2026-06 exhibits the
+actual ~1 ms jitter, and `1000BONKUSDT` 2026-06 carries the real upstream gap found during the
+audit. A test asserts the fixture still jitters — if the source stops, the tolerance it justifies
+would be silently untested.
+
+**Mutation testing led to deleting a branch rather than testing it.** The first implementation
+measured each settlement step against the *earlier* row's interval, which misreads a 4h→8h
+re-cadence as a missing settlement, and compensated with a skip for pairs straddling a change. No
+test could distinguish that skip present or absent. Measuring against the **later** row — the
+cadence the settled period actually ran under — is correct in both directions with no special case.
+A test now fails if the choice is reverted.
+
+Worth noting as a pattern: a mutation surviving is not always a missing test. Sometimes it means
+the branch has no behaviour worth having.
+
+**The review then found the completeness check skipped itself on exactly the interesting months.**
+It compared settlement count against `24 / interval × days`, defined only for a single cadence — so
+any month containing an interval change passed with no coverage check at all. Found by running it
+against `0GUSDT`'s real listing month: **233 settlements where a full month allows 180**, accepted
+without complaint.
+
+That month also produced a data finding worth carrying into M6/M8: **`0GUSDT` settled every 4h at
+listing (2025-09-17), then every 1h from 2025-09-22**, returning to 4h by 2026-06. The cadence is
+not a symbol constant, let alone a global one. Hard-coding 8h would misstate a 1h symbol's
+annualised funding by 8×.
+
+Completeness is now **continuity plus endpoint coverage**, which holds whatever the interval mix.
+A late start is legitimate and reported; a short end is a defect. The exact-count check is kept
+where meaningful, since it alone catches an interval column that disagrees with the actual cadence.
+`backfill` now returns its reports rather than only logging them — M1-T4's allowlist and the M9
+caveats both need them. 11/11 mutations caught afterwards; suite 97 offline + 3 network.
 
 ### M1-T1 complete — trades downloader
 

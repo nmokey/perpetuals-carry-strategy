@@ -1,7 +1,7 @@
 # M1-T2 — Historical funding rate downloader
 
 **Milestone:** M1
-**Status:** Ready to implement — all open questions resolved 2026-08-12. One non-blocking data question remains (see Open questions).
+**Status:** **Complete** (2026-08-12)
 **Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
 OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.3, Section 4.1, Section 5 (M1)
@@ -98,6 +98,63 @@ off-by-one here — treating a settlement as known one interval early — is a t
 and would inflate every downstream result. M6-T3 and M7-T3 test this properly; this task's
 contribution is to store the timestamp unambiguously and document its meaning in the module
 docstring.
+
+## As built
+
+`python/perpcarry/ingestion/fetch_funding.py`, reusing `binance_archive.py` and `download.py`
+from M1-T1/M0-T6. 28 tests: 27 offline, 1 `network`. CLI mirrors `fetch_trades`.
+
+Both fixtures are **real archive months**, chosen so the hard cases are genuine rather than
+invented: `BTCUSDT` 2026-06 is a clean 8h month that actually exhibits the ~1 ms jitter, and
+`1000BONKUSDT` 2026-06 is a 4h month carrying the real upstream gap (179 settlements, missing
+2026-06-24 04:00 UTC). `test_the_fixture_really_does_jitter` guards the guard — if the source ever
+stops jittering, the tolerance it justifies is silently untested.
+
+**A branch was removed rather than tested.** The first implementation measured each step against
+the *earlier* row's interval, which misreads a 4h→8h re-cadence as a missing settlement, and
+compensated with a skip for pairs straddling a change. Mutation testing showed no test could
+distinguish that skip being present or absent — because with the earlier-row reading the straddling
+step is benign in the one direction, and the skip papered over the other. Measuring against the
+**later** row (the cadence the settled period ran under) is correct in both directions and needs no
+special case. Simpler code, one fewer untestable branch, and now covered by a test that fails if
+the choice is reverted.
+
+`check_month` orders its checks deliberately: gaps before counts, because "1 gap, first missing
+settlement expected at 2026-06-24 04:00 UTC" is a far more useful message than "179 settlements,
+expected 180".
+
+**Verified by mutation, 10/10 defects detected**: jitter tolerance removed, gaps never detected,
+count unchecked, interval hard-coded to 8h, earlier-row interval used, implausible rates ignored,
+`mark_price` emitted as null, month-spill check removed, backfill stores nothing, schema drift
+undetected.
+
+### What the pre-push review changed
+
+**The completeness check silently skipped itself on exactly the interesting months.** It
+compared settlement count against `24 / interval x days`, which is only defined for a single
+cadence — so any month containing an interval change was waved through with no coverage check at
+all. Found by running it against `0GUSDT`'s real listing month, which has **233 settlements where
+a full month allows 180**, and passed.
+
+That month also produced a data finding: `0GUSDT` settled every **4h at listing (2025-09-17), then
+every 1h from 2025-09-22**, before returning to 4h by 2026-06. The cadence is not a symbol
+constant. Hard-coding 8h would misstate a 1h symbol's annualised funding by 8x.
+
+Completeness is now expressed as **continuity plus endpoint coverage**, which holds whatever the
+interval mix: no gaps, and the final settlement within one interval of the month end. A late
+*start* is legitimate (a symbol listed mid-month has no earlier settlements) so it is reported
+rather than raised; a short *end* is a defect, since the month has closed.
+
+The exact-count check is kept where it is meaningful, because it still catches one thing the
+others cannot: an interval column that disagrees with the actual cadence. Label every row 8h while
+settling every 4h and neither continuity nor endpoints fire — only the count notices there are
+twice as many settlements as 8h allows.
+
+`backfill` now **returns** the reports rather than only logging them. Partial listing months and
+interval changes are legitimate but consequential, and M1-T4's allowlist and the M9 caveats both
+need them; a log line loses them.
+
+**Verified by mutation, 11/11 detected** after the review, including all four new checks.
 
 ## Out of scope
 
