@@ -196,7 +196,7 @@ Each milestone can, in principle, stop and produce a coherent deliverable on its
 | M0-T1 | Repo & build system setup | CMake-based C++ build; `uv`-managed Python env | `cmake --build` succeeds; `uv run python -c "import perpcarry"` succeeds against a stub module | — |
 | M0-T2 | C++ test framework setup | Catch2 (or GoogleTest) integrated | One trivial passing C++ unit test runs via `ctest` | M0-T1 |
 | M0-T3 | Python test/lint setup | pytest + ruff configured | One trivial passing pytest test; `ruff check` passes on empty scaffold | M0-T1 |
-| M0-T4 | Parquet I/O utility | Read/write helper for tabular data | Round-trip test: write a sample DataFrame, read it back, assert equality | M0-T1 |
+| M0-T4 | Parquet I/O utility | Read/write helper for tabular data | Round-trip test: write a sample DataFrame, read it back, assert *exact* equality — values bit-for-bit and dtypes unchanged, with no tolerance and no coercion; any deviation (partitioned column order, row order) asserted explicitly rather than smoothed over | M0-T1 |
 | M0-T5 | Continuous integration | GitHub Actions workflow running both build paths on Linux and macOS | Lint, pytest, and `ctest` all run per push/PR on both platforms; a deliberately broken commit fails the run | M0-T2, M0-T3 |
 
 ### M1 — Data Acquisition Pipeline

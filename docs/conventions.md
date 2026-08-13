@@ -178,3 +178,28 @@ only running it and inspecting the result is.
 
 **How to apply.** Export the same variables the workflow sets, run the commands verbatim, and
 check the *side effects* (did the cache directory actually get populated?), not just the exit code.
+
+---
+
+## C12 — Prove a test fails on the defect it exists to catch
+
+**Rule.** A passing test is not evidence of anything. Before trusting a test, break the code it
+covers and confirm it goes red. Prefer assertions with every tolerance switched off.
+
+**Why.** The original M0-T4 round-trip test passed while every float in storage was silently
+perturbed. Two defaults did it: `assert_frame_equal` uses `check_exact=False` (rtol 1e-5), and the
+test coerced dtypes with `.astype(...)` before comparing — so it could not see a precision loss or
+a dtype regression. Demonstrated on 2026-08-12 by injecting a 1e-9 relative error: the old suite
+reported 7 passed, the rewritten one caught it. For a project whose output is numbers, a storage
+layer that quietly perturbs the fifth significant figure is exactly the defect that survives to
+the writeup.
+
+**Read detections, not failure counts.** A mutation is caught if at least one test fails *and* its
+name identifies the cause. A single defect tripping five tests is overlap — five tests sharing a
+code path — not five independent checks, and it is not evidence of better coverage.
+
+**How to apply.** Round-trip and equality assertions use `check_exact=True` and `check_dtype=True`.
+Never coerce or normalise a value before comparing it — if the code under test changes something,
+assert *that specific change* explicitly so a future change in the behaviour fails loudly. When
+adding tests for a new component, mutate the implementation in a scratch copy and confirm each
+test fails; revert before committing.

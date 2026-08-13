@@ -24,6 +24,34 @@ Milestone status at a glance:
 
 ## 2026-08-12
 
+### M0-T4 round-trip test strengthened
+
+The partitioned round-trip test was weaker than its acceptance criterion. It coerced dtypes with
+`.astype(...)` before comparing, and `assert_frame_equal` defaults to `check_exact=False`
+(rtol 1e-5) — so it could see neither a dtype regression nor a precision loss.
+
+Demonstrated concretely: with `write_parquet` silently multiplying every float by `1 + 1e-9`, the
+**old suite reported 7 passed**. The rewritten suite fails 4 tests on the same defect.
+
+Rewritten with exact comparison (`check_exact=True`, `check_dtype=True`), no coercion, and the two
+real deviations asserted explicitly instead of silently corrected: partitioned reads move partition
+columns to the end, and do not preserve row order across fragments. Added coverage for the Hive
+on-disk layout (`symbol=.../date=...`, which Section 3.4 requires and nothing had checked), both
+branches of the previously untested `overwrite` flag, and `dataset_path`. 7 tests → 12.
+
+Verified by mutation rather than by passing: **4 of 4 injected defects detected** — float32
+downcast, 1e-9 perturbation, partitioning ignored, `overwrite` ignored — each caught by at least
+one test whose name identifies the cause; the clean tree passes 12/12.
+
+Read the *detection*, not the failure count. One defect can trip five tests simply because every
+test round-trips through `write_parquet`; that is overlap, not five independent checks. The
+best-targeted mutation (`overwrite` ignored) produced the smallest count — a single failure in
+`test_rewrite_is_idempotent_when_overwriting`. When debugging a storage regression, start from the
+narrowest failing test name.
+
+Lesson saved as C12, and M0-T4's acceptance criterion in the design doc sharpened to say *exact*
+equality.
+
 ### CI pipeline added (M0-T5)
 
 `.github/workflows/ci.yml`: two jobs — `python` (ruff, format check, pytest) and `cpp` (standalone
@@ -47,10 +75,10 @@ Prompted by a challenge to the "M0 complete" claim, all four criteria were re-ru
 `git clone` rather than the working tree: build 114/114, `import perpcarry` + `perpcarry_cpp` OK,
 `ctest` 1/1, pytest 9/9, ruff clean. Criteria hold as written.
 
-Caveats surfaced in the process, now addressed or logged: the M0-T4 partitioned round-trip test
-coerces dtypes unnecessarily (dtypes do survive; only column order changes), so it is weaker than
-it should be — still outstanding. The C++ core remains a deliberate stub (C5). And "passes" meant
-"passed once, on one Mac" — which is what M0-T5 exists to fix.
+Caveats surfaced in the process, now all addressed: the M0-T4 partitioned round-trip test coerced
+dtypes unnecessarily and compared with a tolerance — **resolved**, see the entry above. The C++
+core remains a deliberate stub (C5). And "passes" meant "passed once, on one Mac" — which is what
+M0-T5 exists to fix.
 
 ### Agent-orchestration docs scaffolded
 
