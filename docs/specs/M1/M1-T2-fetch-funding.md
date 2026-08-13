@@ -2,7 +2,8 @@
 
 **Milestone:** M1
 **Status:** Draft
-**Depends on:** M0-T4 (complete). OD-1 (venue) OPEN, default Binance Futures assumed.
+**Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
+OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.3, Section 4.1, Section 5 (M1)
 
 ## Goal
@@ -44,15 +45,15 @@ calc_time,funding_interval_hours,last_funding_rate
 | `funding_rate` | `last_funding_rate` | Rename |
 | `mark_price` | — | **Absent from this dataset** |
 
-**Deviation 1 — `mark_price` is not available.** Section 3.3 specifies "Mark price at funding
-settlement", which the funding archive does not carry. Two options, and this needs a decision
-(Q1): join `markPriceKlines` at the settlement timestamp, or drop the column and have M7-T4
-source the settlement price where it is actually needed. Do not silently emit the column as null.
+**Both deviations are now resolved in the design doc; §3.3 has been amended to match reality.**
 
-**Deviation 2 — `funding_interval_hours` is a column, and it is per-symbol.** Section 3.3 does not
-model it, but the strategy cannot annualise a funding rate without it, and it is not a constant
-across symbols (OD-3's altcoin may not be 8h). Carry it through; it is more useful than
-`mark_price`.
+**`mark_price` is dropped.** The archive does not carry it, and it is unused before M7-T4 — which
+should source settlement price from `markPriceKlines` at that point rather than carrying a
+mostly-unused column through the whole pipeline. Do not emit the column as null.
+
+**`funding_interval_hours` is carried through.** It is per-symbol and not a constant 8 (OD-3's
+altcoin may differ), and the strategy cannot annualise without it. Nothing anywhere may hard-code
+8h or `× 3` per day.
 
 ## Timestamp irregularity, verified
 
@@ -83,7 +84,7 @@ Expanded into checkable tests:
 | 2 | Consecutive settlements are `funding_interval_hours` apart within a ±5s tolerance; the `...0001` jitter does **not** trigger a failure | same |
 | 3 | A deliberately removed settlement is detected and reported with its expected timestamp | same |
 | 4 | Rates are plausible: finite, and within the venue's funding rate cap for the symbol | same |
-| 5 | Output matches the agreed schema exactly, including the Q1 resolution for `mark_price` | same |
+| 5 | Output matches §3.3 exactly: `funding_interval_hours` present, `mark_price` absent — not null | same |
 | 6 | Re-fetching a month is idempotent | same |
 | 7 | A partial current month is either refused or clearly flagged, never silently written as complete | same |
 
@@ -106,15 +107,20 @@ docstring.
 
 ## Open questions
 
-**Q1 — `mark_price`: join or drop?** Recommend **drop** for M1: it is unused until M7-T4, joining
-`markPriceKlines` adds a dataset and a timestamp-alignment problem now, and Section 3.3 can be
-amended to reflect what the venue actually publishes. Needs confirmation, and the design doc
-updated either way.
+**Q1 — RESOLVED: drop `mark_price`.** §3.3 amended accordingly on 2026-08-12.
 
-**Q2 — how far back?** Funding history extends to contract inception, which is far longer than the
-usable book window (M1-T3). Suggest fetching generously — the data is ~90 rows/month — so the M6
-model can be fit on a long series even if the backtest window is short. That asymmetry should be
-stated explicitly in the writeup rather than quietly exploited.
+**Q2 — how far back?** Funding history extends to contract inception, far longer than the book
+window (M1-T3, 12 days/year). Fetch generously — ~90 rows/month — so M6 fits on a long series even
+though the backtest window is shorter.
+
+This asymmetry needs stating in the writeup rather than quietly exploited: the funding *model* can
+be estimated on years of data while the *execution cost* model rests on a sparse sample of book
+days. Those are different evidential bases for the two halves of the edge calculation, and a
+reader is entitled to know which half is thinner.
+
+**Q4 — is the current (incomplete) month handled?** The archive is monthly-only, so the current
+month is absent or partial until it closes. Acceptance test 7 covers refusing to write a partial
+month silently; the backtest window should end at the last complete month.
 
 **Q3 — does the altcoin (OD-3) share the 8h interval?** Unknown until the symbol is chosen. The
 `funding_interval_hours` column makes this self-describing, but any hard-coded `× 3` per day

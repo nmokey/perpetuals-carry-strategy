@@ -109,34 +109,73 @@ Most student quant projects either (a) build a generic backtester with an assume
 
 ### 3.2 Order Book (L2 snapshots + diffs)
 
+Source: Tardis.dev `incremental_book_L2` for `binance-futures` (see OD-2). Its native columns are
+`exchange, symbol, timestamp, local_timestamp, is_snapshot, side, price, amount`, which map onto
+this schema directly — including the `amount = 0` convention for level removal.
+
 | Field | Type | Notes |
 |---|---|---|
-| `timestamp` | int64 (ms epoch) | |
+| `timestamp` | int64 (µs epoch in source; normalised to ms on ingest) | Exchange timestamp |
+| `local_timestamp` | int64 | Capture timestamp; the gap to `timestamp` is the vendor's observed latency |
 | `symbol` | string | |
-| `update_id` | int64 | Sequence number, used to detect dropped diffs |
+| `is_snapshot` | bool | Marks the start-of-file book image; replay resets state here |
 | `side` | enum (`bid`/`ask`) | |
 | `price` | float64 | |
 | `quantity` | float64 | `0` = price level removed |
 
+**No `update_id`.** The vendor feed carries no sequence number, so dropped-diff detection cannot be
+sequence-based. Continuity is instead established by (a) each file opening with an `is_snapshot`
+block, and (b) validating replayed state against an independent `book_snapshot_25` for the same
+day (M2-T2). This is weaker than sequence checking and must be stated as such.
+
 ### 3.3 Funding Rate
+
+Source: `data.binance.vision` monthly `fundingRate`, whose native columns are `calc_time,
+funding_interval_hours, last_funding_rate`.
 
 | Field | Type | Notes |
 |---|---|---|
-| `symbol` | string | |
-| `funding_time` | int64 (ms epoch) | |
-| `funding_rate` | float64 | e.g. `0.0001` = 1 bp |
-| `mark_price` | float64 | Mark price at funding settlement |
+| `symbol` | string | Not a column in the source; injected from the archive path |
+| `funding_time` | int64 (ms epoch) | Source column `calc_time`. Jitters by ~1 ms between settlements — see M1-T2 |
+| `funding_rate` | float64 | Source column `last_funding_rate`; e.g. `0.0001` = 1 bp |
+| `funding_interval_hours` | int32 | Per-symbol, **not** a constant 8. Required to annualise; nothing may hard-code 8h |
+
+**`mark_price` is deliberately absent.** It was specified in an earlier draft, but the venue does
+not publish it alongside funding history, and it is unused before M7-T4. If settlement price is
+needed there, source it from `markPriceKlines` at that point rather than carrying a mostly-unused
+column through the pipeline.
 
 ### 3.4 Storage
 
 All datasets stored as partitioned Parquet (`symbol=.../date=...`), read via PyArrow/Polars. DuckDB used as an optional ad hoc SQL layer over the Parquet files for exploratory analysis — no persistent database server required. (See OD-14.)
+
+**Footprint.** Trades and funding are small. Order book data is not: one day of `BTCUSDT`
+`incremental_book_L2` is ~449 MB compressed. At the free tier's one-day-per-month cadence that is
+~5.4 GB/year compressed and several times that decompressed, so the number of months pulled is a
+deliberate choice (see OD-2), not an afterthought.
 
 ---
 
 ## 4. Component Specifications
 
 ### 4.1 Data Ingestion Pipeline (Python)
-Pulls historical trades, funding rates, and order book data from the chosen venue's public endpoints (see OD-1, OD-2). Outputs validated, gap-checked Parquet files.
+Pulls historical trades, funding rates, and order book data, and outputs validated, gap-checked
+Parquet files. Two sources, both static file downloads rather than live API calls:
+
+| Data | Source |
+|---|---|
+| Trades, funding rates, klines | `data.binance.vision` (S3 archive) |
+| L2 order book | Tardis.dev free tier, `binance-futures` (see OD-2) |
+
+**The venue's live REST/WebSocket API is not used, because it is not reachable.** `fapi.binance.com`
+returns `"Service unavailable from a restricted location"` from the development location, as does
+Bybit; the S3 archive and the vendor are unaffected. This rules out live capture and any REST-based
+validation, and is the reason M2-T2/M2-T3 validate against vendor snapshots rather than an
+exchange endpoint. Full evidence in `external-dependencies-audit.md`.
+
+A consequence worth stating plainly: this project cannot be extended to live/paper trading from
+this location without changing venue. That is consistent with the §1.4 non-goals, but it is now a
+hard constraint rather than a choice.
 
 ### 4.2 Order Book Reconstruction Engine (C++)
 Maintains L2 book state from a snapshot + sequential diffs. Deterministic, single-threaded, unit-testable against known checkpoints.
@@ -198,23 +237,29 @@ Each milestone can, in principle, stop and produce a coherent deliverable on its
 | M0-T3 | Python test/lint setup | pytest + ruff configured | One trivial passing pytest test; `ruff check` passes on empty scaffold | M0-T1 |
 | M0-T4 | Parquet I/O utility | Read/write helper for tabular data | Round-trip test: write a sample DataFrame, read it back, assert *exact* equality — values bit-for-bit and dtypes unchanged, with no tolerance and no coercion; any deviation (partitioned column order, row order) asserted explicitly rather than smoothed over | M0-T1 |
 | M0-T5 | Continuous integration | GitHub Actions workflow running both build paths on Linux and macOS | Lint, pytest, and `ctest` all run per push/PR on both platforms; a deliberately broken commit fails the run | M0-T2, M0-T3 |
+| M0-T6 | Ingestion dependencies | HTTP client + archive extraction helpers in the environment | A checksum-verified archive can be downloaded, extracted, and read into a DataFrame by a test; no M1 script needs to add a dependency | M0-T4 |
 
 ### M1 — Data Acquisition Pipeline
 
 | ID | Task | Deliverable | Acceptance Criteria | Depends On |
 |---|---|---|---|---|
-| M1-T1 | Historical trades downloader | `fetch_trades.py` | Downloaded row counts consistent with venue-reported volume; no gaps in `trade_id` sequence | M0-T4 |
-| M1-T2 | Historical funding rate downloader | `fetch_funding.py` | One row per funding interval per symbol; matches venue's published funding calendar | M0-T4 |
-| M1-T3 | Order book historical data acquisition | Per approach chosen in OD-2 | Book state reconstructable at any timestamp in the recorded window; validated against a known-good reference snapshot | M0-T4, **OD-2 resolved** |
-| M1-T4 | Data validation/QA pass | `validate_data.py` | Zero unexplained gaps, duplicate timestamps, or non-monotonic sequences on final dataset | M1-T1, M1-T2, M1-T3 |
+| M1-T1 | Historical trades downloader | `fetch_trades.py`, using the archive's **`trades`** dataset (not `aggTrades`) | Daily quantity reconciles with the same day's `klines` volume within a documented tolerance; `trade_id` contiguous within and across days | M0-T4, M0-T6 |
+| M1-T2 | Historical funding rate downloader | `fetch_funding.py` | Settlement count equals `24 / funding_interval_hours × days`; consecutive settlements are one interval apart within a ±5s tolerance (source timestamps jitter ~1 ms) | M0-T4, M0-T6 |
+| M1-T3 | Order book historical data acquisition | `fetch_book.py`, pulling Tardis free-tier `incremental_book_L2` | Book state reconstructable at any timestamp within a downloaded day; replayed top-25 levels match the same day's `book_snapshot_25` | M0-T4, M0-T6 |
+| M1-T4 | Data validation/QA pass | `validate_data.py` | Zero *unexplained* gaps, duplicate timestamps, or non-monotonic sequences; every acknowledged gap carries a documented reason in a committed allowlist | M1-T1, M1-T2, M1-T3, M1-T5 |
+| M1-T5 | Symbol metadata derivation | `derive_symbol_meta.py` + committed lookup table | Tick and step size recovered by GCD over a long trades window; recovered values stable across independent windows for the same symbol | M1-T1 |
+
+Note the dependency order within M1: T5 precedes T4 despite the numbering, since the QA pass
+validates the derived metadata alongside everything else. T5 is numbered last because it was
+identified last — during the external-dependencies audit, not in the original design.
 
 ### M2 — Order Book Reconstruction Engine (C++)
 
 | ID | Task | Deliverable | Acceptance Criteria | Depends On |
 |---|---|---|---|---|
 | M2-T1 | Core price-level data structure | `OrderBook` class: add/modify/delete at price level, best bid/ask query | Unit tests cover top-of-book and deep-level updates; matches independently-reconstructed reference book on a sample window | M1-T4, **OD-5 resolved** |
-| M2-T2 | Snapshot + diff replay logic | `BookReplayer` | Replayed state matches reference checkpoints (e.g. venue REST snapshot) within documented tolerance | M2-T1 |
-| M2-T3 | Book state debug serialization | Dump-to-CSV/human-readable function | Manual spot-check against exchange UI/API for 3 sample timestamps | M2-T2 |
+| M2-T2 | Snapshot + diff replay logic | `BookReplayer` | Replayed state matches the vendor's independently-constructed `book_snapshot_25` for the same day, top 25 levels, within documented tolerance | M2-T1 |
+| M2-T3 | Book state debug serialization | Dump-to-CSV/human-readable function | Automated diff against `book_snapshot_25` at 3+ sample timestamps, with human-readable output for inspection when it fails | M2-T2 |
 
 ### M3 — Python Bindings & Ingestion Pipeline Concurrency
 
@@ -293,17 +338,48 @@ Each decision below should be resolved (or explicitly deferred with a stated def
 *Affects: M1, M1-T3.*
 Options: Binance Futures (deepest free historical data via `data.binance.vision`, 8h funding for most symbols), Bybit, OKX.
 Recommendation: Binance Futures, for data availability.
-Status: OPEN (default: Binance Futures).
+Status: **RESOLVED 2026-08-12 — Binance USD-M futures**, for the whole project. The reasoning is
+stronger than originally stated but for a different reason: the S3 archive carries years of
+trades and funding and is freely reachable, while the *live* API is geo-blocked from the
+development location. Binance is therefore the best available source for history and unusable for
+live capture — which is fine, since nothing in scope needs live data. Bybit is also geo-blocked;
+OKX is reachable but its funding history is only ~3 months deep, which would gut M6. See
+`external-dependencies-audit.md`.
 
 **OD-2 — Historical L2 order book data acquisition** *(highest-risk decision — resolve first)*
 *Affects: M1-T3 and everything downstream.*
 Context: Trades and funding rates are commonly archived for free; full L2 depth history generally is not. This is a real feasibility constraint, not a minor detail.
-Options:
+Options as originally framed:
 - (a) Record live via websocket depth-diff stream going forward for several weeks — free, but delays timeline and limits the analysis window to what's recorded.
 - (b) Purchase a limited historical range from a tick-data vendor (e.g. Tardis.dev) — fast, higher fidelity, has a cost.
 - (c) Approximate using top-of-book / partial-depth snapshots (free, immediately available) — understates slippage for larger synthetic orders since deep-book behavior isn't captured.
-Recommendation: Start with (c) to unblock M2 onward immediately; run (a) in parallel to accumulate true L2 data for a later higher-fidelity pass. State the approximation explicitly in the writeup rather than glossing over it.
-Status: **OPEN — resolve before M1-T3.**
+
+**All three were checked against reality on 2026-08-12, and two do not survive:**
+- (a) is unavailable on Binance from the development location (geo-blocked). It would require
+  switching venue to OKX, whose ~3-month funding history would gut M6.
+- (c) **does not exist as described.** The free `bookDepth` dataset is not an order book — it is
+  cumulative depth at 12 fixed percentage bands from mid, ~30s irregular sampling, no sequence
+  numbers, no per-level prices. `bookTicker` (L1) was discontinued after 2024-03-30. Neither can
+  drive a book walk, so "start with (c) to unblock M2" was never an available path.
+
+Status: **RESOLVED 2026-08-12 — option (d), the vendor's free tier.** Tardis.dev serves
+`incremental_book_L2` for `binance-futures` with no API key, for **the first day of every month**,
+back to at least 2020 (verified: 1st → HTTP 200, all other days → 401). Its format matches §3.2
+including the `amount = 0` removal convention, and it is the same venue as the trades and funding
+archive, so single-venue integrity holds.
+
+Sparse coverage is acceptable because the architecture already decouples it: M5 calibrates an
+impact *model* from book data and M7's backtest consumes the fitted model, never the raw book.
+Continuous coverage was never required — only enough book days to fit and out-of-sample validate.
+
+Two sub-decisions remain open, and both are cost/scope rather than feasibility:
+- **How many months to pull.** ~449 MB compressed per BTCUSDT day. Start with 12–24 months.
+- **Licensing.** The vendor's terms for free samples have **not** been reviewed. Do this before
+  relying on the data; it must never be committed or enter CI caches (C9).
+
+Trade-off to state in the writeup: the book data is 12 days/year rather than continuous, and
+carries no sequence numbers, so dropped-update detection is snapshot-comparison-based rather than
+sequence-based.
 
 **OD-3 — Symbol selection**
 *Affects: M8-T2.*
@@ -359,7 +435,21 @@ Status: OPEN, leaning capacity-curve approach.
 **OD-11 — Fee & funding settlement assumptions**
 *Affects: M7-T4.*
 Recommendation: Use the venue's historically accurate fee schedule and funding interval for the relevant symbol/date range (not current rates, if fees changed over time).
-Status: OPEN — requires venue-specific research at implementation time.
+
+**Finding (2026-08-12): no machine-readable historical fee schedule exists.** Not in the archive;
+`exchangeInfo` is geo-blocked; the venue's public fee page returns a challenge page rather than
+content. There is no API for *historical* schedules even where the venue is reachable. This is not
+a rounding detail — taker fees are of the same order as the funding edge, so the fee assumption can
+flip the sign of the headline result.
+
+Status: **RESOLVED 2026-08-12 — treat the fee as a swept parameter, with a manually sourced dated
+schedule as the base case.** Concretely: commit a small dated fee table with citations for the base
+case, and report the capacity answer as a function of fee level across a plausible range. This
+converts an unavoidable data gap into a sensitivity result, which is a stronger artifact than a
+hidden assumption, and it directly serves the project's "honest about limitations" stance.
+
+The funding *interval* half of this decision is settled separately and cleanly:
+`funding_interval_hours` is a per-row column in the source data (§3.3).
 
 **OD-12 — Backtest validation methodology**
 *Affects: M7-T3.*
@@ -383,7 +473,7 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 
 - Order book reconstruction validated against reference snapshots within a documented depth-level tolerance.
 - Impact model shows a statistically meaningful, out-of-sample-validated relationship between order size and slippage (not just in-sample fit).
-- Backtest produces a concrete, defensible capacity finding: a specific size (or range) at which net-of-cost P&L crosses zero, for at least one symbol.
+- Backtest produces a concrete, defensible capacity finding: a specific size (or range) at which net-of-cost P&L crosses zero, for at least one symbol — reported as a function of fee level, since no historical fee schedule is obtainable (OD-11).
 - SPSC queue throughput benchmark documented with a specific events/sec figure.
 - Look-ahead bias explicitly tested and ruled out via the M7-T3 poisoning test — this artifact alone directly answers a gap called out in prior resume feedback.
 - The rigor artifacts are *enforced*, not just written once: the look-ahead poisoning test, fixed-seed determinism checks, and both build paths run in CI rather than depending on someone remembering to re-run them.
@@ -393,7 +483,8 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 
 | Risk | Mitigation |
 |---|---|
-| R1 — Historical L2 data is unavailable or expensive | Fallback to partial-depth approximation (OD-2c); document the limitation honestly rather than overstating fidelity |
+| R1 — Historical L2 data is unavailable or expensive | **Largely retired 2026-08-12.** Resolved via the vendor's free tier (OD-2d): true L2, no cost, same venue. Residual risk is coverage (12 days/year) and the vendor's free-tier terms, not availability. The original fallback (OD-2c) was found not to exist |
+| R8 — An external assumption is wrong and is only discovered mid-implementation | Every external claim is verified by calling the service before the milestone that depends on it, and recorded in `external-dependencies-audit.md`. Four of the original assumptions were wrong; assume the next batch contains some too |
 | R2 — Funding persistence signal turns out to be weak or absent | Not a failure mode — a rigorous "the edge doesn't survive realistic costs" finding is itself a valid, honest research result and arguably a *more* interesting one |
 | R3 — Scope creep from trying to hit every technique at once | Milestones ordered so M0-M4 alone is a complete, demonstrable systems project; M5-M10 add research depth incrementally and can be paused after any milestone |
 | R4 — pybind11 interop overhead undermines the "low-latency" story | Keep the C++/Python boundary at the pipeline level (post-SPSC-queue), not per-tick; benchmark and report interop overhead honestly rather than hand-waving around it |
@@ -426,9 +517,12 @@ perpcarry/
 ├── python/
 │   └── perpcarry/
 │       ├── ingestion/
+│       │   ├── download.py          # shared HTTP fetch + checksum + extract (M0-T6)
 │       │   ├── fetch_trades.py
 │       │   ├── fetch_funding.py
-│       │   └── fetch_book.py
+│       │   ├── fetch_book.py
+│       │   ├── derive_symbol_meta.py
+│       │   └── validate_data.py
 │       ├── models/
 │       │   ├── impact_model.py
 │       │   └── funding_model.py
@@ -450,7 +544,12 @@ perpcarry/
 
 - **C++17/20**, CMake, pybind11, Catch2, ThreadSanitizer (for M3-T2 concurrency validation)
 - **Python 3.12+** (narrowed from 3.11+ to what CI actually exercises — see D-008), managed via `uv`; pandas/polars for data wrangling; statsmodels/scikit-learn for regression; PyMC (optional, M6 stretch) or hand-rolled conjugate updating for Bayesian inference; matplotlib/plotly for reporting
-- **Storage:** Parquet via PyArrow, DuckDB as an optional query layer
+- **Storage:** Parquet via PyArrow, DuckDB as an optional query layer. Budget ~5.4 GB/year
+  compressed for order book data at the one-day-per-month cadence; trades and funding are small.
+- **External data:** `data.binance.vision` S3 archive (trades, funding, klines) and the Tardis.dev
+  free tier (`incremental_book_L2`, `book_snapshot_25`). Both are static file downloads over
+  HTTPS — no venue API, no credentials, no rate-limit handling. An HTTP client is therefore a
+  project dependency (M0-T6); the live venue API is unreachable from the development location.
 - **CI:** GitHub Actions — ruff + pytest + `ctest` on Linux and macOS per push/PR; heavy checks
   (TSan, full backtests, reproducibility gate) deferred to a nightly tier. CMake and Ninja are
   installed as venv dev dependencies rather than system packages, so runners need only `uv`.

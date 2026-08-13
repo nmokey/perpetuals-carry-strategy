@@ -14,8 +14,8 @@ When an OD is resolved, update both the table below *and* the Status line in the
 
 | ID | Topic | Status | Blocks |
 |---|---|---|---|
-| OD-1 | Exchange/venue selection | OPEN (default: Binance Futures) | M1 |
-| OD-2 | Historical L2 book acquisition | **OPEN — highest risk** | M1-T3 → everything downstream |
+| OD-1 | Exchange/venue selection | **RESOLVED 2026-08-12** — Binance USD-M | M1 |
+| OD-2 | Historical L2 book acquisition | **RESOLVED 2026-08-12** — Tardis free tier (option d) | M1-T3 → everything downstream |
 | OD-3 | Symbol selection | OPEN (deliberately deferred to M8) | M8-T2 |
 | OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
 | OD-5 | Book reconstruction fidelity | Leaning resolved: L2 | M2-T1 |
@@ -24,7 +24,7 @@ When an OD is resolved, update both the table below *and* the Status line in the
 | OD-8 | Bayesian inference method | OPEN, leaning closed-form conjugate | M6-T2 |
 | OD-9 | Entry/exit threshold policy | OPEN, leaning credible-interval | M7-T1 |
 | OD-10 | Position sizing / capacity model | OPEN, leaning capacity-curve | M7-T2, M8-T3 |
-| OD-11 | Fee & funding settlement assumptions | OPEN — needs venue research | M7-T4 |
+| OD-11 | Fee & funding settlement assumptions | **RESOLVED 2026-08-12** — fee as swept parameter + dated base-case table | M7-T4 |
 | OD-12 | Backtest validation methodology | OPEN, leaning walk-forward | M7-T3 |
 | OD-13 | Build tooling | **RESOLVED 2026-08-12** — see D-001 | M0 |
 | OD-14 | Data storage format | **RESOLVED 2026-08-12** — Parquet/PyArrow, DuckDB optional | M0-T4, M1 |
@@ -153,3 +153,48 @@ defend a capability nobody wants. Prefer a narrow claim that is true to a broad 
 unverified. Supersedes the `>=3.11` half of D-005.
 
 **Revisit when.** Someone actually needs to run this on 3.11.
+
+---
+
+## D-009 — Data sourcing settled: Binance archive + Tardis free tier (2026-08-12)
+
+**Context.** The external-dependencies audit found four of the design doc's remote assumptions
+broken. OD-1, OD-2 and OD-11 were all resolved together because they turned out to be one
+question.
+
+**Decision.** Binance USD-M for the whole project. Trades, funding and klines from
+`data.binance.vision`; L2 order book from the Tardis.dev free tier
+(`incremental_book_L2` + `book_snapshot_25`, first day of every month). No venue API is used —
+it is geo-blocked and unnecessary. Fees become a swept parameter with a dated base-case table,
+since no historical fee schedule is machine-readable anywhere.
+
+**Why this combination.** It is the only one giving deep funding history *and* true L2 *and* a
+single venue. OKX is reachable and has live L2 but only ~3 months of funding history, which would
+gut M6. Binance's own free book datasets are unusable (`bookDepth` is percentage buckets;
+`bookTicker` was discontinued in 2024-03).
+
+**Consequences accepted.**
+- Book coverage is 12 days/year, not continuous. Tolerable because M5 fits a model and M7 consumes
+  the model, never the raw book — but it means impact cannot be conditioned on same-day book state
+  during the backtest.
+- No `update_id` in the vendor feed, so dropped-update detection is snapshot-comparison rather than
+  sequence-based. Strictly weaker; §3.2 now says so.
+- The project cannot be extended to live trading from this location without changing venue.
+- ~5.4 GB/year compressed for book data.
+
+**Still open.** How many months to pull, and the vendor's free-tier licensing terms — which have
+**not** been read and must be before the data is relied upon.
+
+---
+
+## D-010 — New tasks M0-T6 and M1-T5 (2026-08-12)
+
+**Context.** Two dependencies the design doc never listed, both surfaced by the audit.
+
+**Decision.** Add **M0-T6** (HTTP client + shared download/checksum/extract helper — the project
+had no HTTP client at all, blocking every M1 fetcher) and **M1-T5** (symbol tick/step size derived
+by GCD over observed trades, since `exchangeInfo` is geo-blocked, the archive has no metadata, and
+the vendor's instruments API is paid-only).
+
+**Why they were missed.** Both are the kind of dependency that is invisible until you try to write
+the code — which is the argument for writing specs before implementing, not after.

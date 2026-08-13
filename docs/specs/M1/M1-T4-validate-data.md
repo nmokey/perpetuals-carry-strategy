@@ -1,8 +1,8 @@
 # M1-T4 — Data validation / QA pass
 
 **Milestone:** M1
-**Status:** Draft (book-data checks blocked behind M1-T3 / OD-2)
-**Depends on:** M1-T1, M1-T2, M1-T3
+**Status:** Draft
+**Depends on:** M1-T1, M1-T2, M1-T3, M1-T5
 **Design doc:** Section 3, Section 4.1, Section 5 (M1)
 
 ## Goal
@@ -52,8 +52,18 @@ Grouped by what they protect against.
 | Funding rates within the symbol's cap | |
 | No zero-trade days for a liquid symbol | A structurally empty day means a fetch bug, not a quiet market |
 
-Book-data checks (sequence continuity, recorder downtime, snapshot agreement) are specified in
-M1-T3 and are blocked with it.
+### Order book (unblocked by OD-2's resolution)
+
+| Check | Rationale |
+|---|---|
+| Each book day opens with an `is_snapshot` block | Without it the day cannot be replayed from a known state |
+| `amount = 0` rows are present | Their absence means an upstream clean step silently dropped level removals |
+| Book days are first-of-month only, and each has a matching `book_snapshot_25` | The free tier's shape; a missing reference file makes M2-T2 unverifiable |
+| Book coverage dates fall inside the trades/funding coverage window | Prevents calibrating impact on a period the backtest never sees |
+
+**Sequence continuity is not checkable.** This feed carries no `update_id` (§3.2), so dropped
+updates cannot be detected by sequence gap. Replay-vs-snapshot agreement (M2-T2) is the substitute,
+and it is weaker — the validator should not imply otherwise.
 
 ## Output
 

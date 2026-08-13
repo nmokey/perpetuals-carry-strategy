@@ -71,10 +71,16 @@ validated against a reference snapshot") is **unsatisfiable under (c)**. Choosin
 rewriting that criterion and re-scoping M2, which removes most of the C++ systems content the
 milestone ordering treats as independently demonstrable (R3).
 
-**Unblocked by.** An OD-2 decision made against this evidence. A fourth option not in the design
-doc — run the whole project on OKX, recording true L2 live — is now the most direct path to the
-stated criterion. Recommendation: **start an OKX recorder now regardless**, since it is the only
-option whose cost is measured in elapsed time, and it is discardable at no loss.
+**Resolution available (2026-08-12).** The full external-dependencies audit found a source that
+meets the original criterion: **Tardis.dev's free tier serves `incremental_book_L2` for
+`binance-futures` with no API key, for the first day of every month, back to at least 2020** —
+snapshot + diffs with `amount = 0` for level removal, matching §3.2 exactly. Same venue as the
+deep trades/funding archive, so single-venue integrity is preserved.
+
+Sparse coverage is not a problem for this architecture: M5 calibrates an impact *model* from book
+data and M7's backtest consumes the fitted model, never the raw book. See
+`external-dependencies-audit.md` §A2. Outstanding sub-questions: how many months to pull (449 MB
+compressed per BTCUSDT day) and the vendor's licensing terms for the free samples.
 
 ---
 
@@ -105,6 +111,43 @@ documented schema does not describe the data the project plans to start with.
 
 **Unblocked by.** A snapshot-shaped schema alongside the diff schema, and a `BookReplayer` mode
 that ingests snapshots directly rather than replaying diffs onto them. Coupled to B-001.
+
+---
+
+### B-006 — No machine-readable historical fee schedule (OD-11)
+
+**Blocks.** M7-T4, and therefore the sign of the headline P&L result.
+
+**Verified 2026-08-12.** Not in the archive; `exchangeInfo` is geo-blocked; `binance.com`'s fee
+page returns HTTP 202 (challenge page) rather than content. There is no API for *historical* fee
+schedules even where the venue is reachable.
+
+**Why it matters more than it looks.** Taker fees are of the same order as the funding edge, so
+the fee assumption can flip the result's sign. This is not a rounding detail.
+
+**Options.** (a) Source manually and commit a dated lookup table with citations; (b) treat the fee
+as a swept parameter and report capacity as a function of it; (c) assume current rates and state
+the limitation. Recommend **(b) with (a) as the base case** — it converts a data gap into a
+sensitivity result, which is a better artifact than a hidden assumption.
+
+**Unblocked by.** A decision. This is the main open item before implementation.
+
+---
+
+### B-007 — Symbol metadata (tick size, step size) has no specified source
+
+**Blocks.** M2 (price-level granularity), M4-T3 (lot normalisation), M7-T2 (sizing) — none of
+which the design doc notes as needing it.
+
+**Verified 2026-08-12.** `exchangeInfo` geo-blocked; archive has no metadata tree; Tardis's
+instruments API is paid-only (`"available only for active pro and business subscriptions"`).
+
+**Workaround verified.** Infer from the trades archive via GCD of distinct observed prices and
+quantities — on `0GUSDT` (51,469 trades) this recovers tick `0.01`, step `1`. Caveat: it recovers
+*observed* granularity, which equals the true tick only with enough distinct prices; compute once
+per symbol over a long window and commit the result rather than deriving it ad hoc.
+
+**Unblocked by.** Adding an M1 task for it — currently specified nowhere.
 
 ---
 

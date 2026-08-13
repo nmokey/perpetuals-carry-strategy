@@ -1,134 +1,108 @@
 # M1-T3 — Order book historical data acquisition
 
 **Milestone:** M1
-**Status:** **Blocked — OD-2 unresolved.** Per convention C4 this spec is not written around an
-assumed resolution. What follows is the evidence needed to *make* the decision, and what the spec
-becomes under each option.
-**Depends on:** M0-T4 (complete), **OD-2 resolved** (open), OD-1 (open)
+**Status:** Draft — **unblocked 2026-08-12** by OD-2's resolution (was Blocked)
+**Depends on:** M0-T4, M0-T6, OD-1 (resolved: Binance USD-M), OD-2 (resolved: vendor free tier)
 **Design doc:** Section 3.2, Section 4.1, OD-2, Risk R1
 
 ## Goal
 
-Acquire order book data sufficient to reconstruct book state at arbitrary timestamps, so the M4
-impact simulator can walk it. This is the project's highest-risk dependency: the entire
-contribution is that execution costs are *calibrated from real book data*, so the fidelity
-available here bounds what the project can honestly claim.
+Produce `fetch_book.py`, downloading L2 order book data sufficient to reconstruct book state at
+arbitrary timestamps within each downloaded day. This is what makes the project's central claim
+possible — that execution costs are *calibrated* from real book data rather than assumed — so the
+fidelity obtained here bounds what the writeup may honestly assert.
 
-## Findings — verified 2026-08-12
+## Source
 
-The design doc's OD-2 option (c), "approximate using top-of-book / partial-depth snapshots (free,
-immediately available)", **does not exist in the form assumed.** Both free Binance candidates were
-downloaded and inspected:
-
-### `bookDepth` — not an order book
-
-Sampled `BTCUSDT-bookDepth-2026-06-01.zip` (current, actively maintained):
+Tardis.dev free tier, `binance-futures`, no API key required:
 
 ```
-timestamp,percentage,depth,notional
-2026-06-01 00:00:07,-5.00,9474.17100000,683676749.44930000
-2026-06-01 00:00:07,-0.20,354.43700000,26073796.28200000
+https://datasets.tardis.dev/v1/binance-futures/{type}/{YYYY}/{MM}/{DD}/{SYMBOL}.csv.gz
 ```
 
-- **Not price levels.** It is cumulative depth at 12 fixed percentage distances from mid:
-  ±0.2, ±1, ±2, ±3, ±4, ±5%.
-- **~2,628 samples/day**, irregularly spaced (~30s), timestamps to the second only.
-- No `update_id`, no diffs, no per-level prices or quantities.
+| Type | Use |
+|---|---|
+| `incremental_book_L2` | The primary dataset — snapshot + diffs |
+| `book_snapshot_25` | Independent reference for validating replay (M2-T2) |
 
-This cannot drive a book walk, and cannot exercise the M2 `OrderBook` / `BookReplayer` design
-(price-level add/modify/delete, snapshot + sequenced diffs) at all — it is a different data model.
+**Coverage, verified 2026-08-12 by probe:** the **first day of every month** returns HTTP 200;
+every other day returns 401. Confirmed back to 2020-01-01, for altcoins (`DOGEUSDT`) and for other
+venues. Do not write a date loop that assumes contiguous days — it will 401 on the 2nd.
 
-It is not useless: cumulative notional within ±X% of mid is close to a direct read on "how much
-can I execute inside X% impact", which is a crude capacity curve. But it cannot produce
-size-resolved slippage for orders smaller than the ±0.2% bucket, which is where most of the
-interesting range lies.
+Schema: `exchange, symbol, timestamp, local_timestamp, is_snapshot, side, price, amount`, with
+`amount = 0` meaning the level was removed. `timestamp` is **microseconds**, not milliseconds —
+normalise on ingest to match every other dataset in §3.
 
-### `bookTicker` — discontinued
+Size: ~449 MB compressed per BTCUSDT day (measured). Stream; never load whole.
 
-L1 best bid/ask. Available 2023-05-16 through **2024-03-30**; every date from 2024-04-01 onward
-returns 404 (probed directly). So free L1 history is frozen two years in the past, and cannot be
-extended.
+## Why sparse coverage is acceptable
 
-### Live capture from this location is venue-constrained
+One day per month is not continuous, and that is fine given the architecture — but the reasoning
+must be stated in the writeup rather than assumed:
 
-| Source | Reachable from here | L2 available |
-|---|---|---|
-| Binance archive (S3) | Yes | **No** — see above |
-| Binance REST/WS (`fapi`/`fstream`) | **No** — geo-blocked, `"restricted location"` | n/a |
-| Bybit | **No** — CloudFront country block | n/a |
-| OKX REST/WS | Yes | **Yes** — `/api/v5/market/books` returns levels with a `seqId` |
+M5 calibrates an impact *model* from book data. M7's backtest consumes the fitted model and never
+touches the raw book. So what is required is enough book days to fit the model and validate it out
+of sample, not book data at every backtest decision point. Twelve days a year over several years
+gives both cross-sectional variation (order size) and temporal variation (across regimes).
 
-OKX's books channel carries `seqId`, which maps cleanly onto Section 3.2's `update_id` and
-supports exactly the snapshot + sequenced-diff model the C++ replayer is designed for.
+What is genuinely lost: the impact model cannot be conditioned on same-day book state during the
+backtest, so it is applied as a static (or slowly time-varying) function. That is a real
+limitation and belongs in the M9 caveats.
 
-## What this means for OD-2
+## Deviations from the design doc's original assumptions
 
-The options in the design doc need restating against the evidence:
+**No `update_id`.** §3.2 originally specified a sequence number for dropped-diff detection. This
+feed has none. Continuity is instead established by each file opening with an `is_snapshot` block,
+and by validating replayed state against `book_snapshot_25`. This is weaker than sequence checking
+and the design doc now says so.
 
-- **(a) Record live depth-diffs.** Still viable, but **not on Binance from this machine** — the
-  venue is geo-blocked. On OKX it works today and yields true L2 with sequence numbers. Cost: the
-  analysis window starts empty and grows from the day recording begins, so every day of delay is a
-  day permanently unavailable.
-- **(b) Buy from a vendor** (e.g. Tardis.dev). Unchanged, and the only route to *historical* L2.
-  Adds cost, plus licensing constraints that would tighten C9 (never let vendor data reach CI
-  caches or artifacts).
-- **(c) Free partial-depth approximation.** **Substantially weaker than the design doc assumes.**
-  Realistically: `bookDepth` percentage buckets (current, coarse) or `bookTicker` L1 (finer, but
-  ending 2024-03). Neither supports a book walk.
+**`local_timestamp` is new and worth keeping.** The gap between it and `timestamp` is the vendor's
+observed capture latency — useful for judging whether the data supports latency-sensitive claims
+(it does not, particularly).
 
-**A fourth option, not in the design doc:** run the whole project on **OKX** rather than Binance —
-recording L2 live while pulling OKX trades and funding for the same window. Self-consistent venue,
-true L2, no geo-blocking. Cost: no deep historical archive, so the analysis window is bounded by
-recording time.
+## Output
 
-**What must not happen:** mixing venues — Binance trades/funding with an OKX book. The impact
-model would be calibrated on a different market's liquidity than the funding edge it is netted
-against, and the headline capacity number would be meaningless.
-
-## Consequence for M2, if (c) is chosen
-
-M2's `OrderBook` and `BookReplayer` assume price-level state and sequenced diffs. Under (c) there
-is nothing to replay, and M2 would need re-scoping — which also removes most of the C++ systems
-content the milestone ordering treats as independently demonstrable (Risk R3). This makes OD-2
-a decision about the shape of the project, not just a data-sourcing detail.
+`data/book/symbol={SYMBOL}/date={YYYY-MM-DD}/*.parquet`, plus the reference snapshots under
+`data/book_snapshot/...`. Given the size, converting CSV → Parquet on ingest and deleting the
+source archive is worth doing; the download cache (M0-T6) keeps re-fetching cheap during
+development.
 
 ## Acceptance criteria
 
-Copied verbatim from the design doc Section 5 table:
+From the design doc Section 5 table, as revised:
 
-> Book state reconstructable at any timestamp in the recorded window; validated against a
-> known-good reference snapshot
+> Book state reconstructable at any timestamp within a downloaded day; replayed top-25 levels
+> match the same day's `book_snapshot_25`
 
-Note this criterion is **unsatisfiable under option (c)** as the data actually exists: percentage
-buckets do not constitute reconstructable book state, and there is no independent snapshot to
-validate against. Choosing (c) requires rewriting the criterion, not just the implementation.
+| # | Test | Where |
+|---|---|---|
+| 1 | Downloaded day parses to the §3.2 schema with µs→ms normalisation applied | `tests/ingestion/test_fetch_book.py` |
+| 2 | The file opens with an `is_snapshot` block; a file that does not is rejected | same |
+| 3 | `amount = 0` rows are preserved as removals, not silently dropped as zero-quantity noise | same |
+| 4 | A non-first-of-month date fails with a clear message naming the free-tier limitation, not a bare 401 | same |
+| 5 | Ingest is streaming — memory stays bounded on a large fixture | same |
+| 6 | Both `incremental_book_L2` and `book_snapshot_25` are fetched for each requested day | same |
 
-Under (a)/(b) it expands to:
+Test 3 guards a plausible mistake: filtering `quantity > 0` while cleaning would turn every level
+deletion into a silently persistent phantom level, and the book would drift without ever erroring.
 
-| # | Test |
-|---|---|
-| 1 | Replaying diffs from a snapshot reproduces a later independently-captured snapshot, level for level, within a documented depth |
-| 2 | A dropped sequence number is detected, not silently absorbed |
-| 3 | Recorder gap/downtime is recorded as an explicit gap, never interpolated |
-| 4 | Reconstructed best bid/ask at sampled timestamps matches an independent L1 source |
+Full replay correctness is M2-T2's criterion, not this task's — here we only ensure the inputs it
+needs are present and well-formed.
+
+## Out of scope
+
+- Book reconstruction itself — M2.
+- Any live capture. The venue's WebSocket is geo-blocked and unused (§4.1).
 
 ## Open questions
 
-**Q1 — OD-2, restated with evidence: (a) on OKX, (b) purchase, (c) accept a much weaker
-approximation, or (d) move the whole project to OKX?** This is the decision. My recommendation:
-**start an OKX L2 recorder now, today, regardless of the final choice.** It is cheap, it is the
-only option whose cost is *time*, and the data it accumulates is worthless if started late and
-valuable if started early. It preserves (a) and (d) while the rest is decided, and can be thrown
-away at no loss if (b) is chosen.
+**Q1 — how many months?** Recommend 12–24, chosen to overlap the funding history used by M6. At
+~449 MB/day compressed that is ~5.4–10.8 GB. Needs a decision before the first bulk pull.
 
-**Q2 — if the venue splits, does the project still answer its question?** Related to Q1. Worth
-deciding explicitly rather than discovering at M8 that the two legs are incomparable.
+**Q2 — vendor licensing.** The free tier's terms have **not** been read. Must be done before
+relying on the data. It must never be committed or reach CI caches (C9).
 
-**Q3 — does OD-3's altcoin have usable L2 on the chosen venue?** Liquidity ranking drives symbol
-choice at M8, but the recorder has to be pointed at symbols *now*. Recording a couple of plausible
-altcoin candidates alongside BTC costs little and avoids being unable to run M8-T2 later.
-
-**Q4 — how long a window is enough?** The impact model needs enough size/time variation to fit
-(M5-T1) and the backtest needs enough funding cycles to be meaningful (M7-T3). Nobody has stated a
-minimum. This should be answered before committing to a recording-based approach, since it sets
-the project's critical path.
+**Q3 — which symbols?** BTC is settled. OD-3 defers the altcoin to M8, but book days are tied to
+calendar dates, so pulling a couple of plausible candidates now costs only disk and avoids
+re-pulling later. Unlike live recording, nothing is lost by waiting — the archive is historical —
+so this is a convenience question, not a deadline.

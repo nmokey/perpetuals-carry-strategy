@@ -2,8 +2,8 @@
 
 **Milestone:** M1
 **Status:** Draft
-**Depends on:** M0-T4 (complete). OD-1 (venue) is OPEN with a documented default of Binance
-Futures — this spec assumes that default; see Open questions.
+**Depends on:** M0-T4 (complete), M0-T6 (HTTP client — blocks this task).
+OD-1 **resolved**: Binance USD-M futures.
 **Design doc:** Section 3.1, Section 4.1, Section 5 (M1)
 
 ## Goal
@@ -103,18 +103,20 @@ data, not synthesised, so schema drift in the upstream archive is caught.
 
 ## Open questions
 
-**Q1 — the acceptance criterion is venue-specific and needs a decision.** "No gaps in `trade_id`"
-holds for the raw `trades` dataset but *not* for `aggTrades`, where IDs are aggregation indices and
-gaps are expected by design. This spec resolves it by using `trades`. If the size of `trades`
-proves impractical for the target date range, the criterion must be relaxed to monotonicity and
-the design doc updated — do not switch datasets while leaving the criterion as written.
+**Q1 — RESOLVED.** The design doc's M1-T1 row now names the `trades` dataset explicitly and states
+the reconciliation criterion in terms of `klines` volume. If `trades` proves impractically large
+for the chosen range, the criterion must be relaxed to monotonicity and the design doc updated in
+the same change — do not switch to `aggTrades` while leaving the criterion as written.
 
-**Q2 — what date range?** Not specified anywhere. It is coupled to M1-T3: the impact model can
-only be calibrated over the window where book data also exists, which is currently the binding
-constraint (see M1-T3). Suggest deferring the trades backfill window until OD-2 is resolved, then
-fetching trades for that window plus a lead-in for ADV.
+**Q2 — what date range?** Still open, but no longer blocked. Book data (M1-T3) is first-of-month
+only, back to 2020, so the binding constraint is now a *choice* of how many months to pull rather
+than an availability limit. Suggest: pick the book window first (12–24 months), then fetch trades
+across that whole span continuously — trades are cheap and continuous coverage helps ADV and the
+volume profile even on days without book data.
 
-**Q3 — OD-1 is still OPEN.** This spec assumes the documented default (Binance Futures). That
-default is now materially better-supported than when written — the archive is reachable and
-current from the US while the REST API is not — but the venue choice interacts with M1-T3, where
-Binance is the *worse* option from this location. See B-004.
+**Q3 — RESOLVED.** OD-1 is settled on Binance USD-M. The archive is reachable and current; the
+live API is geo-blocked but unused. See `external-dependencies-audit.md`.
+
+**Q4 — new.** `klines` lives under an **interval subdirectory**
+(`daily/klines/{SYM}/1m/{SYM}-1m-{date}.zip`), unlike every other dataset. The reconciliation code
+must not reuse the flat path builder.

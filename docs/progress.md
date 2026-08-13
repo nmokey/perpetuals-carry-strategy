@@ -24,6 +24,56 @@ Milestone status at a glance:
 
 ## 2026-08-12
 
+### Design adjusted to the audit; OD-1, OD-2, OD-11 resolved
+
+The audit's ten recommended edits are applied to `design-doc.md`, and propagated to the M0 and M1
+specs. **Three open decisions closed** (D-009): Binance USD-M throughout, book data from the Tardis
+free tier, fees as a swept parameter with a dated base-case table.
+
+Design doc changes: §3.2 rewritten around the vendor's actual schema (adds `is_snapshot` and
+`local_timestamp`, **drops `update_id`** — the feed has none, so dropped-update detection is
+snapshot-comparison rather than sequence-based, and is weaker); §3.3 drops `mark_price` and adds
+`funding_interval_hours`; §3.4 gains a storage footprint; §4.1 rewritten around static file
+downloads with the geo-block stated; M1-T1/T2/T3 and M2-T2/T3 acceptance criteria rewritten to be
+satisfiable; §7, §8 (R1 retired, R8 added), §9 and §10 updated.
+
+**Two new tasks** (D-010), both dependencies the design never listed: **M0-T6** — the project has
+no HTTP client at all, which blocks every M1 fetcher — and **M1-T5**, symbol tick/step derivation,
+needed by M2, M4-T3 and M7-T2 with no obtainable authoritative source.
+
+Specs now written: `M0/M0-T6`, `M1/M1-T1`, `M1-T2`, `M1-T3` (was Blocked, now unblocked), `M1-T4`,
+`M1-T5`.
+
+**Still open, both deliberately:** how many months of book data to pull (~449 MB/day compressed),
+and the vendor's free-tier licensing terms, which have not been read and must be before the data
+is relied upon.
+
+### External-dependencies audit — 13 assumptions checked, OD-2 resolvable
+
+`external-dependencies-audit.md` sweeps every claim the design doc makes about an external
+service, each verified by calling the service from this machine rather than reading docs. Four
+assumptions broken, two gaps needing a decision, and one finding that unblocks the project's
+highest-risk dependency.
+
+**The unblock:** Tardis.dev's free tier serves `incremental_book_L2` for `binance-futures` with no
+API key — first day of every month, back to at least 2020, snapshot + diffs with `amount = 0` for
+level removal, matching §3.2 exactly. Same venue as the deep trades/funding archive, so the project
+keeps single-venue integrity *and* gets true L2. Sparse coverage is fine because M5 calibrates a
+model and M7 consumes the model, never the raw book.
+
+**Broken assumptions:** funding history has no `mark_price` (§3.3); "the venue's public endpoints"
+(§4.1) are geo-blocked; M2-T2/M2-T3's "venue REST snapshot" and "exchange UI" validation routes are
+unreachable — replaceable with Tardis `book_snapshot_25`; `trade_id` contiguity holds only for the
+`trades` dataset.
+
+**Two open decisions before implementation:** no machine-readable historical fee schedule exists
+(B-006 — and taker fees are the same order as the funding edge, so this can flip the result's
+sign), and symbol tick/step size has no specified source (B-007 — inferable from trades data by
+GCD, verified, but currently specified nowhere).
+
+Ten specific design-doc edits are listed at the end of the audit. Not yet applied — they change the
+user's authored document and should be reviewed first.
+
 ### M1 specs written; two findings that change OD-2
 
 Specs for all four M1 tasks are in `docs/specs/M1/`. Written against the venue's actual data rather
