@@ -65,7 +65,12 @@ Most student quant projects either (a) build a generic backtester with an assume
 ┌───────────────────────┐
 │   Storage Layer           │  (Parquet, local filesystem)
 └───────────┬─────────────┘
-            │
+            │ PyArrow read (Python owns all Parquet I/O — D-012)
+            v
+┌───────────────────────┐
+│   Replay Driver          │  (Python) — reads rows, hands over a batch
+└───────────┬─────────────┘
+            │ pybind11 — once per batch, never per tick (Risk R4)
             v
 ┌─────────────────────────────────────────────────┐
 │              C++ Core (perpcarry_cpp)              │
@@ -91,6 +96,8 @@ Most student quant projects either (a) build a generic backtester with an assume
 ```
 
 **Design rationale:** correctness-critical, deterministic logic (book reconstruction) lives in a single-threaded C++ core for testability. Concurrency is introduced only at the point where it's realistically motivated — decoupling data ingestion from simulation via a lock-free queue, mirroring how real feed-handler → strategy-engine boundaries work (see OD-6). The Python layer owns everything statistical: regression, Bayesian inference, strategy decisions, and reporting.
+
+The C++ core does no file I/O in either direction (D-012). Python reads the Parquet with PyArrow and passes a batch of rows across the pybind11 boundary; the core takes an in-memory batch, not a path. This keeps the boundary at the pipeline level per Risk R4 and keeps Arrow C++ out of the build. The tradeoff is that replay input is materialised before it crosses, so peak memory scales with batch size — revisit only if M10 profiling shows the boundary dominating.
 
 ---
 
@@ -138,7 +145,7 @@ funding_interval_hours, last_funding_rate`.
 | `symbol` | string | Not a column in the source; injected from the archive path |
 | `funding_time` | int64 (ms epoch) | Source column `calc_time`. Jitters by ~1 ms between settlements — see M1-T2 |
 | `funding_rate` | float64 | Source column `last_funding_rate`; e.g. `0.0001` = 1 bp |
-| `funding_interval_hours` | int32 | Per-symbol, **not** a constant 8. Required to annualise; nothing may hard-code 8h |
+| `funding_interval_hours` | int32 | **Not a constant, and not even a per-symbol constant.** Measured: majors 8h; `1000BONKUSDT` 4h; `0GUSDT` ran 4h at listing, 1h from 2025-09-22, 4h again by 2026-06. Required to annualise — read it per row, never per symbol |
 
 **`mark_price` is deliberately absent.** It was specified in an earlier draft, but the venue does
 not publish it alongside funding history, and it is unused before M7-T4. If settlement price is
@@ -546,6 +553,8 @@ perpcarry/
 - **Python 3.12+** (narrowed from 3.11+ to what CI actually exercises — see D-008), managed via `uv`; pandas/polars for data wrangling; statsmodels/scikit-learn for regression; PyMC (optional, M6 stretch) or hand-rolled conjugate updating for Bayesian inference; matplotlib/plotly for reporting
 - **Storage:** Parquet via PyArrow, DuckDB as an optional query layer. Budget ~5.4 GB/year
   compressed for order book data at the one-day-per-month cadence; trades and funding are small.
+  **Arrow C++ is deliberately not a dependency** — Python does all Parquet I/O and hands batches
+  to the core over pybind11 (D-012), so the C++ side reads no files.
 - **External data:** `data.binance.vision` S3 archive (trades, funding, klines) and the Tardis.dev
   free tier (`incremental_book_L2`, `book_snapshot_25`). Both are static file downloads over
   HTTPS — no venue API, no credentials, no rate-limit handling. An HTTP client is therefore a

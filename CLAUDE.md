@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Milestone **M0 is complete (T1–T6)**; M1 is specced but unimplemented. What exists is the build system, the Python package skeleton, the Parquet I/O layer (M0-T4), the download/extract helpers (M0-T6), and a stub C++ core whose only job is to prove the toolchain works end to end. `cpp/` contains a `version()` function and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue`, and the impact simulator are all still to be written (M2–M4), as are the `models/`, `strategy/`, and `reporting/` packages and every M1 fetcher.
+**M0 complete (T1–T6). M1 in progress: T1 (trades) and T2 (funding) complete; T3, T4, T5 specced and ready.** Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`. ~97 offline + 3 network tests, CI green on Linux and macOS.
+
+Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages, and M1's `fetch_book.py`, `derive_symbol_meta.py` and `validate_data.py`.
+
+**Nothing needs to run continuously.** Every source is a static historical archive, so there is no recorder, no daemon, and no data that decays while a decision is pending.
 
 **Data sourcing is settled** (D-009, and `docs/external-dependencies-audit.md`): Binance USD-M throughout — trades/funding/klines from the `data.binance.vision` S3 archive, L2 order book from the Tardis.dev free tier (first day of each month). **No venue API is used or usable** — `fapi.binance.com` and Bybit are geo-blocked from this location. Don't write code that calls one.
 
@@ -68,7 +72,7 @@ Two rules follow from this:
 1. **Check the task's dependencies before implementing.** Section 5 tables list `Depends On` for every task, and several tasks are blocked on an *open design decision* (bolded, e.g. "**OD-2 resolved**"). If you are asked to implement a task whose blocking OD is still `OPEN` in Section 6, surface that first — each OD has a documented recommendation/default that can be adopted, but the choice should be explicit, and the doc's Status line updated when it is made.
 2. **Acceptance criteria are the spec.** Each task row states a concrete acceptance criterion (e.g. "no gaps in `trade_id` sequence", "withholding future data does not change historical outputs"). Implement against those, and add the test the criterion implies.
 
-The doc has five known gaps — a missing C++-side Parquet reader, a book schema that assumes diffs the interim data source lacks, two over-tight dependency edges, a mis-sequenced fee/settlement task, and a venue-specific `trade_id` criterion. They are recorded with detail and interim paths in `docs/blockers.md`; read it before starting any milestone rather than rediscovering them.
+Of the doc's five originally-known gaps, three are closed: the missing C++-side Parquet reader (D-012 — Python does the I/O, the core takes a batch), the book schema that assumed diffs the data lacks (§3.2 rewritten), and the venue-specific `trade_id` criterion. **Two remain open, both on the watch list**: two over-tight dependency edges (M2-T1 on M1-T4, M4-T2 on M3-T2 — both developable against synthetic fixtures first, so don't let the doc's edge serialize work), and a mis-sequenced fee/settlement task (M7-T4 is listed after M7-T3, but T3's P&L needs it — expect a minimal settlement model inside T3). All are recorded with detail and interim paths in `docs/blockers.md`; read it before starting any milestone rather than rediscovering them.
 
 The highest-risk unresolved decision is **OD-2** (historical L2 order book data acquisition) — it gates M1-T3 and everything downstream. The doc's recommendation is to start with free partial-depth snapshots to unblock M2+, while recording live websocket depth-diffs in parallel for a later higher-fidelity pass.
 

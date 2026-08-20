@@ -22,7 +22,67 @@ Milestone status at a glance:
 
 ---
 
+## 2026-08-20
+
+### Blocker sweep, and B-002 resolved as D-012
+
+No code changed. Suite re-verified before and after: **97 offline passed, 3 network deselected**,
+`ruff check` and `ruff format --check` clean.
+
+**B-006 was stale and had been for eight days.** It sat in Active claiming to be "the main open
+item before implementation" — but OD-11 resolved it on 2026-08-12, the same day it was raised,
+via exactly its own recommended path (fee as a swept parameter, manually-sourced dated base-case
+table). Nothing was wrong with the decision; the blocker just never got swept when the OD closed.
+
+Filed the general lesson with it: **resolving an OD does not close the blockers that cite it.**
+`blockers.md` is read as steering at the start of a session, so a false Active entry costs a
+future session real time — it is worse than no entry.
+
+**B-002 resolved as D-012** — Python owns all Parquet I/O; the C++ core takes an in-memory batch
+across pybind11 and does no file I/O at all. This was the adjacent gap: §2's diagram drew storage
+feeding the core directly while §10 listed no Arrow C++ dependency, and nothing would have failed
+until M2-T2 or M3 tried to write the read.
+
+Chosen over adding Arrow C++ because it is what Risk R4's pipeline-level boundary already implies,
+because Arrow C++ would land in the wheel build, the standalone CMake path, and four CI legs to
+duplicate what PyArrow does in the process that wrote the file — and because the performance
+argument for a native reader is a guess until an M10 profile exists. The cost is stated rather
+than hidden: replay input is materialised before it crosses, so peak memory scales with batch
+size. Reversible behind the same `BookReplayer` interface if profiling ever justifies it.
+
+Propagated so the documents no longer disagree: §2's diagram routes storage → core through a
+Python replay driver, §2's rationale and §10's storage bullet state the no-file-I/O rule, and
+`CLAUDE.md`'s "five known gaps" line now reflects the two that are actually still open.
+
+**Active blockers are now B-004 and B-007 only** — B-004 a standing constraint rather than a task,
+B-007 resolved by implementing M1-T5.
+
+---
+
 ## 2026-08-12
+
+### Stale documentation swept
+
+Retired advice and statuses that later findings had overtaken:
+
+- **The "start a recorder now, every day of delay is lost data" urgency is withdrawn** from
+  `blockers.md` and the audit. It was correct only while OD-2 option (a) was live; every source the
+  project now uses is a static historical archive, so nothing decays while a decision is pending.
+  The residual argument against dawdling is precedent, not decay — `bookTicker` was published for
+  ten months and then simply stopped.
+- **B-001, B-003 and B-005 moved to Resolved** with their resolutions recorded. B-004 (geo-blocking)
+  stays Active as a standing constraint rather than an open task — nothing in scope needs the live
+  API.
+- **Three watch-list items retired** as done: CI has run and is green, network tests exist and are
+  marked, and M1-T1's `trade_id` criterion was settled by naming the `trades` dataset.
+- **Funding cadence corrected everywhere** — audit A12, design doc §3.3, M1-T2's spec. Earlier text
+  said majors are 8h and thin symbols 4h; `0GUSDT` actually ran 4h → 1h → 4h within a year, so the
+  interval is not a per-symbol constant and must be read per row.
+- **Added a watch-list entry for M6**: an AR(1) fit over a window whose sampling frequency changes
+  mid-way is not sampling one process throughout. Better raised in M6-T2's spec than found at fit
+  time.
+- `CLAUDE.md` and `README.md` now state what actually exists and works, including that nothing needs
+  to run continuously.
 
 ### M1-T2 complete — funding rate downloader
 

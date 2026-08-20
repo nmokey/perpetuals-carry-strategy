@@ -11,25 +11,6 @@ more useful record.
 
 ## Active
 
-### B-001 — OD-2: historical L2 order book data is not secured
-
-**Blocks.** M1-T3, and therefore M2's validation-against-real-data criteria and everything
-downstream. This is the project's highest-risk dependency.
-
-**Situation.** Trades and funding rates are freely archived; full L2 depth history generally is
-not. Options are (a) record live websocket depth-diffs for weeks, (b) buy a range from a tick-data
-vendor, (c) approximate with free partial-depth snapshots.
-
-**Interim path.** The design doc's recommendation — start with (c), run (a) in parallel — **does
-not survive contact with the data**: see B-005 for why (c) does not exist as described, and B-004
-for why (a) cannot be run against Binance from this location. Neither has been started.
-
-**Unblocked by.** A decision on OD-2 made against the evidence in B-004/B-005 and
-`specs/M1/M1-T3-order-book-acquisition.md`, plus — if any recording-based option — actually
-starting the recorder, since every day of delay is a day of lost data.
-
----
-
 ### B-004 — Binance's REST/WS API is geo-blocked from this location; Bybit too
 
 **Blocks.** Any live capture or REST pull from Binance — most importantly M1-T3 option (a).
@@ -44,93 +25,13 @@ L2 levels with a `seqId`, and its funding history endpoint responds normally.
 aggTrades, klines, fundingRate, bookDepth) remain fully available. The split matters: Binance is
 the better source for *history* and an unavailable source for *live capture*, from this machine.
 
-**Unblocked by.** Choosing a venue for live capture (OKX is the working option), or accepting
-that live capture happens elsewhere. Note that using a VPN to reach a venue that has deliberately
-geo-blocked the user is a terms-of-service question, not just a technical workaround.
+**Not a blocker in practice.** Nothing in scope needs the live API: OD-2 resolved to historical
+archives, so M1-T3 no longer has an option (a). This stays Active as a standing constraint rather
+than an open task — it is the reason no code may call a venue endpoint, and the reason this project
+cannot be extended to live or paper trading from here without changing venue.
 
----
-
-### B-005 — OD-2 option (c) does not exist in the form the design doc assumes
-
-**Blocks.** M1-T3, and it changes the *shape* of the OD-2 decision rather than just its cost.
-
-**Verified 2026-08-12** by downloading and inspecting the actual files. See
-`specs/M1/M1-T3-order-book-acquisition.md` for the evidence in full.
-
-- `bookDepth` is **not** an order book: cumulative depth at 12 fixed percentage bands (±0.2, ±1..5%)
-  from mid, sampled ~2,628×/day at irregular ~30s intervals, no `update_id`, no per-level prices.
-  It cannot drive a book walk and cannot exercise the M2 replayer design at all.
-- `bookTicker` (L1) **was discontinued**: available 2023-05-16 → 2024-03-30, 404 from 2024-04-01.
-
-So "free partial-depth snapshots, immediately available" is really "coarse percentage buckets, or
-two-year-stale L1". The design doc's recommended interim path — start with (c) to unblock M2 —
-does not work, because there is nothing for M2 to replay.
-
-**Consequence.** M1-T3's acceptance criterion ("book state reconstructable at any timestamp,
-validated against a reference snapshot") is **unsatisfiable under (c)**. Choosing (c) means
-rewriting that criterion and re-scoping M2, which removes most of the C++ systems content the
-milestone ordering treats as independently demonstrable (R3).
-
-**Resolution available (2026-08-12).** The full external-dependencies audit found a source that
-meets the original criterion: **Tardis.dev's free tier serves `incremental_book_L2` for
-`binance-futures` with no API key, for the first day of every month, back to at least 2020** —
-snapshot + diffs with `amount = 0` for level removal, matching §3.2 exactly. Same venue as the
-deep trades/funding archive, so single-venue integrity is preserved.
-
-Sparse coverage is not a problem for this architecture: M5 calibrates an impact *model* from book
-data and M7's backtest consumes the fitted model, never the raw book. See
-`external-dependencies-audit.md` §A2. Outstanding sub-questions: how many months to pull (449 MB
-compressed per BTCUSDT day) and the vendor's licensing terms for the free samples.
-
----
-
-### B-002 — No C++-side Parquet reader is specified
-
-**Blocks.** M2-T2 / M3, whichever first needs the C++ core to consume stored data.
-
-**Situation.** The Section 2 architecture diagram shows Python writing Parquet and the C++ core
-reading it, but the Section 10 tech stack lists no Arrow C++ / Parquet dependency. The gap is
-silent — nothing fails until someone tries to implement the read.
-
-**Options.** Add Arrow C++ as a dependency, or have Python read the Parquet and feed the replayer
-across the pybind11 boundary. The latter fits the pipeline-level-boundary rule (Risk R4) and adds
-no C++ dependency.
-
-**Unblocked by.** Choosing one and recording it as a D-entry.
-
----
-
-### B-003 — Book schema assumes diffs that the recommended interim data source lacks
-
-**Blocks.** M1-T3 schema design, M2-T2 replay logic.
-
-**Situation.** Section 3.2 models the book as diffs carrying `update_id` sequence numbers, used
-for dropped-message detection. That only exists under OD-2 options (a)/(b). The *recommended*
-interim option (c), partial-depth snapshots, has no diff stream and no sequence numbers — so the
-documented schema does not describe the data the project plans to start with.
-
-**Unblocked by.** A snapshot-shaped schema alongside the diff schema, and a `BookReplayer` mode
-that ingests snapshots directly rather than replaying diffs onto them. Coupled to B-001.
-
----
-
-### B-006 — No machine-readable historical fee schedule (OD-11)
-
-**Blocks.** M7-T4, and therefore the sign of the headline P&L result.
-
-**Verified 2026-08-12.** Not in the archive; `exchangeInfo` is geo-blocked; `binance.com`'s fee
-page returns HTTP 202 (challenge page) rather than content. There is no API for *historical* fee
-schedules even where the venue is reachable.
-
-**Why it matters more than it looks.** Taker fees are of the same order as the funding edge, so
-the fee assumption can flip the result's sign. This is not a rounding detail.
-
-**Options.** (a) Source manually and commit a dated lookup table with citations; (b) treat the fee
-as a swept parameter and report capacity as a function of it; (c) assume current rates and state
-the limitation. Recommend **(b) with (a) as the base case** — it converts a data gap into a
-sensitivity result, which is a better artifact than a hidden assumption.
-
-**Unblocked by.** A decision. This is the main open item before implementation.
+Using a VPN to reach a venue that has deliberately geo-blocked the user is a terms-of-service
+question, not a technical workaround.
 
 ---
 
@@ -150,7 +51,8 @@ minimum — getting that backwards silently truncates precision by 100× (it did
 Caveat: it recovers *observed* granularity, which equals the true tick only with enough distinct
 prices; compute over a long window and commit the result rather than deriving it ad hoc.
 
-**Resolved by** M1-T5, specced 2026-08-12. Cross-window stability is its acceptance criterion.
+**Will be resolved by** M1-T5 — specced 2026-08-12, not yet implemented. Cross-window stability is
+its acceptance criterion.
 
 ---
 
@@ -168,27 +70,78 @@ Not blocking yet; will bite at the milestone named.
   funding settlement accounting. Expect to build a minimal settlement model inside T3 and refine
   it in T4, rather than treating T4 as purely additive.
 
-- **M1-T1's "no gaps in `trade_id`" is venue-specific.** On Binance `aggTrades` the IDs are
-  aggregated and gaps are expected by design, so the criterion as written would fail on correct
-  data. Either validate against the raw trades endpoint or relax the criterion to monotonicity —
-  and say which in the spec.
+- **Funding cadence is not a symbol constant, and M6 assumes it is.** `0GUSDT` ran 4h at listing
+  (2025-09-17), 1h from 2025-09-22, and 4h again by 2026-06. An AR(1) fit over a window whose
+  sampling frequency changes mid-way is not sampling one process throughout. M6-T2's spec should
+  address this — resample to a common cadence, model in continuous time, or restrict the window —
+  rather than discovering it at fit time.
 
 - **ThreadSanitizer is not yet wired into the build.** M3-T2's acceptance criterion requires a
   TSan-clean stress run; there is currently no sanitizer build configuration, and no nightly CI
   tier to run it in (design doc Section 4.9 specifies the tier; it is not built).
 
-- **CI has never actually run.** The workflow was verified by executing each step's exact command
-  locally on macOS, but no GitHub Actions run exists yet. The Linux leg in particular is
-  unproven — this project has only ever been compiled by AppleClang on arm64, so the first
-  ubuntu run may well surface a missing include or a warning difference. Expect to fix something
-  on the first push.
-
-- **Network tests at M1 will need marking before they exist.** The ingestion pulls hit live
-  exchange endpoints. They must be `@pytest.mark.network` and deselected by default *from the
-  first one written*, or CI becomes flaky and a red build stops being believed (C10, R7).
-
 ---
 
 ## Resolved
 
-*(none yet)*
+### B-006 — no machine-readable historical fee schedule — **resolved 2026-08-12, filed 2026-08-20**
+
+Resolved by OD-11 on the same day it was raised, via the recommended path: **fee treated as a
+swept parameter, with a manually-sourced dated base-case table** — option (b) with (a) as the base
+case. Capacity is reported as a function of the fee rather than resting on one assumed number.
+
+This entry sat in **Active** for eight days after its own resolution, still claiming to be "the
+main open item before implementation". Recorded rather than quietly deleted, because the failure
+mode is the point: resolving an OD does not close the blocker that motivated it, and this file is
+read as steering at the start of a session. **When an OD is resolved, sweep the blockers that cite
+it in the same pass.**
+
+The underlying data gap is unchanged and still real — there is no API for historical fee schedules
+even where the venue is reachable, and taker fees are of the same order as the funding edge, so
+the base-case table's citations need to be dated and checkable when M7-T4 lands.
+
+---
+
+### B-002 — no C++-side Parquet reader was specified — **resolved 2026-08-20**
+
+Resolved as **D-012**: Python reads the Parquet and feeds rows to the replayer across the pybind11
+boundary. The C++ core gains no Arrow/Parquet dependency and no file I/O at all.
+
+The gap was real — §2's diagram drew storage feeding the C++ core directly while §10 listed no
+Arrow C++ dependency, and nothing would have failed until someone tried to write the read. The
+resolution follows the pipeline-level-boundary rule (Risk R4) rather than adding a dependency:
+the boundary is crossed once per replay batch, not per tick.
+
+§2's diagram is updated to route the inbound edge through the Python layer, so the document no
+longer implies a read path that will not be built.
+
+---
+
+### B-001 / B-005 — historical L2 order book data — **resolved 2026-08-12**
+
+Resolved as OD-2 option (d): the Tardis.dev free tier serves `incremental_book_L2` for
+`binance-futures` with no API key, first day of every month, back to at least 2020 — matching §3.2
+including the `amount = 0` removal convention, on the same venue as the trades and funding archive.
+
+The original framing is preserved because the resolution turned on it: option (c) as the design doc
+described it **did not exist**. `bookDepth` is cumulative depth at 12 fixed percentage bands from
+mid, ~30s irregular sampling, no sequence numbers; `bookTicker` (L1) was discontinued after
+2024-03-30. Neither can drive a book walk, so "start with (c) to unblock M2" was never available.
+
+**Nothing here decays with time.** Earlier notes in this file urged starting a live recorder
+because a recording-based option loses a day of data for every day of delay. That urgency died
+with the resolution: every source the project now uses is a static historical archive. See
+`external-dependencies-audit.md` §A2.
+
+Residual, tracked in `specs/M1/M1-T3`: how many months to pull (~449 MB/day for BTC, 10 MB for a
+thin symbol), and the vendor's terms on publishing *derived findings* — permitted use covers the
+research itself; redistribution of raw data does not.
+
+---
+
+### B-003 — book schema assumed diffs the data lacks — **resolved 2026-08-12**
+
+§3.2 was rewritten around the vendor's real schema: gains `is_snapshot` and `local_timestamp`,
+**drops `update_id`**, which this feed does not carry. Dropped-update detection is therefore
+snapshot-comparison (M2-T2 against `book_snapshot_25`) rather than sequence-based — strictly
+weaker, and the design doc now says so rather than implying a guarantee it cannot make.

@@ -15,6 +15,17 @@ size at which net-of-cost P&L crosses zero — not an equity curve.
 See [`docs/design-doc.md`](docs/design-doc.md) for the full design, milestone breakdown, and open
 design decisions.
 
+## Status
+
+**M0 complete; M1 in progress.** Working: partitioned Parquet storage, archive download helpers
+(streamed, checksum-verified, cached), and the historical **trades** and **funding rate**
+downloaders. Order book acquisition, symbol metadata and the data-validation pass are specced and
+next. The C++ core (order book reconstruction, impact simulation) begins at M2.
+
+Data comes from static historical archives — `data.binance.vision` for trades, funding and klines,
+and the Tardis.dev free tier for L2 order book. No venue API is used: `fapi.binance.com` and Bybit
+are geo-blocked from the development location. Nothing needs to run continuously.
+
 ## Layout
 
 ```
@@ -22,7 +33,7 @@ cpp/      C++ core: order book reconstruction, impact simulation, SPSC queue, py
 python/   Research layer: ingestion, statistical models, strategy/backtest, reporting
 tests/    pytest suite mirroring python/
 data/     gitignored local Parquet storage
-docs/     design doc
+docs/     design doc, external-dependencies audit, specs, conventions, progress
 ```
 
 ## Setup
@@ -38,7 +49,8 @@ uv sync          # creates .venv, installs deps, builds the perpcarry_cpp extens
 
 ```bash
 # Python
-uv run pytest                          # full Python suite
+uv run pytest                          # full Python suite (network tests deselected)
+uv run pytest -m network               # tests that hit the real archive
 uv run pytest tests/test_storage.py    # one file
 uv run pytest -k round_trip            # one test by name
 uv run ruff check .                    # lint

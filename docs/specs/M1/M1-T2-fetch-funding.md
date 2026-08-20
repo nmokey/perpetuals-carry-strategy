@@ -182,11 +182,13 @@ reader is entitled to know which half is thinner.
 | `BTCUSDT` | 8h | 90 | −0.67 bp … +1.00 bp |
 | `ETHUSDT` | 8h | 90 | −1.02 bp … +1.00 bp |
 | `DOGEUSDT` | 8h | 90 | −0.81 bp … +1.00 bp |
-| `0GUSDT` | **4h** | 180 | −23.9 bp … +0.50 bp |
+| `0GUSDT` | **4h** *(June 2026; ran 1h in Sept 2025 — see below)* | 180 | −23.9 bp … +0.50 bp |
 | `1000BONKUSDT` | **4h** | 179 | −2.10 bp … +0.50 bp |
 
 The thin symbols settle **every 4 hours, not 8** — so the altcoin leg, which is the entire point of
-M8-T2, is exactly where a hard-coded 8h or `× 3`/day would break. Always read
+M8-T2, is exactly where a hard-coded 8h or `× 3`/day would break. Worse, found later during
+implementation: `0GUSDT` ran **4h at listing (2025-09-17), 1h from 2025-09-22**, and 4h again by
+2026-06 — the cadence is not even constant within a symbol, and 1h occurs. Always read
 `funding_interval_hours`. This also refines OD-1's "8h for most symbols": true for majors,
 false for the class of symbol this project deliberately studies.
 

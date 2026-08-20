@@ -217,3 +217,40 @@ enough that people start commenting out the download.
 every other 4xx fails immediately. This matters for the vendor: a 401 means "not the first of the
 month" and a 404 means "no archive for that day" — both are caller errors, and retrying them
 just makes a mistake slower to discover.
+
+---
+
+## D-012 — Python reads Parquet; the C++ core never touches storage (2026-08-20)
+
+**Context.** B-002. §2's architecture diagram drew the storage layer feeding the C++ core
+directly, but §10's tech stack listed no Arrow C++ / Parquet dependency. Nothing fails until
+someone tries to implement that read — it blocks whichever of M2-T2 / M3 first needs the core to
+consume stored data.
+
+**Decision.** Python owns all Parquet I/O. `BookReplayer` is fed rows across the pybind11
+boundary; the C++ core gains no Arrow dependency, no Parquet dependency, and no file I/O.
+
+**Why.** Three reasons, in order of weight:
+
+1. **It is what the boundary rule already says.** Risk R4 puts the pybind11 boundary at the
+   pipeline level, post-SPSC-queue, never per-tick. A batch of book rows handed in once per replay
+   is exactly that; a C++-side file reader would be a second, redundant entry point into the same
+   data.
+2. **Arrow C++ is a heavy dependency for one function.** It would land in the wheel build, in the
+   standalone CMake path, and in both CI legs on two platforms — to do something PyArrow already
+   does in the process that wrote the file.
+3. **The alternative buys nothing measurable yet.** The performance argument for a native reader
+   is real only if Parquet decode shows up in an M10 profile. It has not been profiled, and M10 is
+   a stretch milestone. Deciding on a guess now costs more than revisiting it with data later.
+
+**Cost, stated plainly.** Feeding rows across the boundary means the replay input is materialised
+in Python before it crosses, so peak memory is bounded by batch size rather than by streaming
+decode. For the one-day-per-month cadence (449 MB/day compressed for BTC, 10 MB for a thin
+symbol) that is acceptable, but it is a real ceiling and it is the thing to measure first if
+replay throughput disappoints.
+
+**Reversible.** If M10 profiling shows the boundary dominating, adding Arrow C++ behind the same
+`BookReplayer` interface is an additive change — no caller moves.
+
+**Follow-through.** §2's diagram now routes the storage → core edge through the Python layer.
+M2-T2 and M3-T1 specs should state that the replayer's input is an in-memory batch, not a path.

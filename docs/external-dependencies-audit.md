@@ -27,11 +27,12 @@ the sweep of the rest, done before implementation rather than during it.
 | A9 | A thin altcoin has usable public history (OD-3, M8-T2) | **Holds** | — |
 | A10 | Historically accurate fee schedules are obtainable (OD-11) | **Gap — unresolved** | M7-T4, headline P&L |
 | A11 | Symbol metadata (tick/step size) is available | **Not stated in the doc; broken; workaround verified** | M2, M4-T3, M7-T2 |
-| A12 | "8h funding for most symbols" (OD-1) | **Unverified, but self-describing in the data** | M6, M7 |
+| A12 | "8h funding for most symbols" (OD-1) | **Measured; materially misleading** — 8h, 4h and 1h all occur, and vary within a symbol | M6, M7, M8 |
 | A13 | Free ADV figures exist to unit-test against (M4-T3) | **No authoritative source; derivable** | M4-T3 |
 
-Two items — **A10** and the storage cost noted under A2 — still need a decision. Everything else
-either holds or has a verified path.
+Two items — **A10** (fees) and the storage cost noted under A2 — still need a decision. Everything
+else either holds or has a verified path. A2's licensing question has since been resolved by
+reading the terms; see A2.
 
 ---
 
@@ -91,8 +92,15 @@ Twelve days a year across several years gives both cross-sectional and temporal 
 ≈ 5.4 GB/year compressed, several times that decompressed. A decision is needed on how many
 months to pull and whether to downsample on ingest.
 
-**Licensing:** Tardis's terms for the free samples were not reviewed. Must be read before this
-data is committed to or redistributed, and it must never enter CI caches or artifacts (C9).
+**Licensing — read 2026-08-12.** The free samples fall under the vendor's standard Terms of
+Service; there is no separate sample licence. "Permitted Use" covers *internal business, research,
+educational or personal use*, so the project's core use is licensed. Clause 9.2(2) forbids
+redistributing the Data, permitting only aggregated calculated Derived Data from which raw data
+cannot be reconstructed. In practice: analysing locally and publishing fitted coefficients, capacity
+curves and plots is fine; committing raw book rows, publishing them, or letting them reach a CI
+cache is not — stricter than C9, and it rules out real vendor rows as test fixtures. One residual
+ambiguity: publishing *research findings* is not expressly addressed, only redistribution of data.
+Worth a confirmation email before M9. Full detail in `specs/M1/M1-T3`.
 
 ### A3 — `mark_price` in funding history. Broken.
 
@@ -195,10 +203,17 @@ window. Should be computed once per symbol over a long window and committed as a
 Verified 2026-08-12 from the archive (June 2026): `BTCUSDT`, `ETHUSDT` and `DOGEUSDT` settle every
 **8h** (90/month); `0GUSDT` and `1000BONKUSDT` settle every **4h** (180/month).
 
-The claim is true for majors and false for exactly the class of symbol this project sets out to
-study (OD-3's thin altcoin, M8-T2). Anything hard-coding 8h or `× 3`/day would silently produce
-half the correct annualised funding on the altcoin leg. `funding_interval_hours` is a per-row
-column — always read it.
+**And it is not even a per-symbol constant.** Checked again during M1-T2 against `0GUSDT`'s listing
+month: it settled every **4h** from listing on 2025-09-17, switched to **1h** on 2025-09-22, and
+was back to 4h by 2026-06. So the cadence varies *within* a symbol over time, and 1h occurs.
+
+The doc's claim is true for majors and false for exactly the class of symbol this project sets out
+to study (OD-3's thin altcoin, M8-T2). Hard-coding 8h would misstate a 1h symbol's annualised
+funding by **8×**. `funding_interval_hours` is a per-row column — always read it, per row, not per
+symbol.
+
+This also lands on M6: an AR(1) fit over a window whose sampling frequency changes mid-way is not
+sampling one process throughout. Tracked on the `blockers.md` watch list.
 
 Two related findings from the same check:
 
@@ -240,5 +255,11 @@ funding and trades history, true L2, no geo-block, no cost.
 Then the remaining open item before implementation is **A10 (fees)**, which is a modelling
 decision rather than a data-availability one.
 
-Optionally, still start an OKX recorder — but the case is now much weaker than it was an hour ago:
-its purpose was to obtain true L2, and that is solved without waiting.
+**No live capture is needed, and nothing decays with time.** Every source above is a static
+historical archive, so there is no recorder to run and no cost to deciding the remaining questions
+carefully. An earlier draft of this document urged starting an OKX recorder immediately; that
+advice was correct only while option (a) was still live, and is now withdrawn.
+
+The one mild argument against indefinite delay is precedent rather than decay: `bookTicker` was
+published from 2023-05 to 2024-03 and then simply stopped, and the vendor's free tier is a courtesy
+rather than a contract. Pull the corpus once M1-T3 exists; there is no reason to rush it tonight.
