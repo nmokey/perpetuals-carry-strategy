@@ -30,6 +30,24 @@ log = logging.getLogger(__name__)
 
 DATASET = "trades"
 
+#: Storage directory under the data root; see fetch_funding.STORAGE_DIR on why this is
+#: a separate name from the archive dataset even when the two happen to match.
+STORAGE_DIR = DATASET
+
+#: A run of at most this many absent ``trade_id`` values is venue behaviour, not lost data.
+#:
+#: **The contiguity claim in the design doc is false, and this is the evidence.** 0GUSDT
+#: 2026-06 has 154 gaps across 2,366,674 trades -- 157 absent ids, every run 1 or 2 long,
+#: no duplicates, and no time discontinuity around them. The decisive test is the
+#: independent one: on 2026-06-01 (4 gaps) and 2026-06-15 (6 gaps) the summed trade
+#: quantity still equals the summed 1m klines volume **exactly**. Ids are skipped; trades
+#: are not lost.
+#:
+#: So this threshold is an early-warning heuristic, not the completeness guarantee. The
+#: guarantee is the klines reconciliation. Set well above the observed noise (2) and far
+#: below anything that could hide real loss -- a missing day is tens of thousands of ids.
+MAX_ID_SKIP = 8
+
 #: Output schema, per design doc Section 3.1 (plus the ``date`` partition key).
 SCHEMA: dict[str, str] = {
     "timestamp": "int64",
@@ -113,6 +131,21 @@ def trade_id_gaps(frame: pd.DataFrame) -> list[tuple[int, int]]:
     return [(int(ids[i]), int(ids[i + 1])) for i in (diffs > 1).nonzero()[0]]
 
 
+def classify_gaps(
+    gaps: list[tuple[int, int]],
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Split gaps into venue id-skips and suspected data loss.
+
+    See :data:`MAX_ID_SKIP`. Returning both rather than filtering keeps the skips visible:
+    they are reported and counted, never silently discarded.
+    """
+    skips, losses = [], []
+    for previous, following in gaps:
+        target = skips if following - previous - 1 <= MAX_ID_SKIP else losses
+        target.append((previous, following))
+    return skips, losses
+
+
 def duplicate_trade_ids(frame: pd.DataFrame) -> list[int]:
     """Trade IDs appearing more than once -- the signature of an overlapping re-fetch."""
     ids = frame["trade_id"]
@@ -188,7 +221,7 @@ def store(frame: pd.DataFrame, *, root: Path | None = None) -> Path:
     Idempotent: ``write_parquet`` defaults to ``delete_matching``, so re-running a date
     replaces its partition rather than appending to it.
     """
-    dest = (root if root is not None else data_root()) / DATASET
+    dest = (root if root is not None else data_root()) / STORAGE_DIR
     return write_parquet(frame, dest, partition_cols=PARTITION_COLS)
 
 
@@ -232,10 +265,21 @@ def backfill(
             previous_last_id = None
             continue
 
-        gaps = trade_id_gaps(frame)
-        if gaps:
+        skips, losses = classify_gaps(trade_id_gaps(frame))
+        if losses:
             raise TradeDataError(
-                f"{symbol} {month:%Y-%m}: {len(gaps)} trade_id gap(s), first at {gaps[0]}"
+                f"{symbol} {month:%Y-%m}: {len(losses)} trade_id gap(s) larger than "
+                f"{MAX_ID_SKIP} ids, first at {losses[0]} -- suspected data loss. "
+                "Reconcile against klines volume before accepting this month."
+            )
+        if skips:
+            absent = sum(b - a - 1 for a, b in skips)
+            log.info(
+                "%s %s: %d venue id-skip(s) covering %d absent trade_id(s)",
+                symbol,
+                month.strftime("%Y-%m"),
+                len(skips),
+                absent,
             )
         duplicates = duplicate_trade_ids(frame)
         if duplicates:
@@ -260,10 +304,11 @@ def backfill(
             first_id = int(frame["trade_id"].iloc[0])
             # Continuity *across* months, which per-month checks cannot see: a whole
             # missing file between two intact ones leaves both looking perfect.
-            if previous_last_id is not None and first_id != previous_last_id + 1:
+            if previous_last_id is not None and first_id - previous_last_id - 1 > MAX_ID_SKIP:
                 raise TradeDataError(
                     f"{symbol}: trade_id gap across the boundary into {month:%Y-%m}: "
-                    f"{previous_last_id} -> {first_id}"
+                    f"{previous_last_id} -> {first_id} "
+                    f"({first_id - previous_last_id - 1} absent) -- suspected data loss"
                 )
             previous_last_id = int(frame["trade_id"].iloc[-1])
 

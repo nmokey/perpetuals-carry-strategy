@@ -263,3 +263,27 @@ corollaries: state the invariant in terms of *what must be true*, not *what you 
 because that is what makes it catch unrelated causes; and when such a guard fires, do not assume
 the cause is the one in its error message. See [[C12]] for the complementary discipline — proving a
 test fails on the defect it was aimed at.
+
+---
+
+## C15 — Derive test fixtures from the code under test, not from a parallel copy of it
+
+Learned 2026-08-20, from M1-T4.
+
+`validate_data` located funding partitions with `fetch_funding.DATASET`, which is `"fundingRate"` —
+the *archive's* name for the dataset, the one that appears in URLs. The fetcher stores under
+`funding/`. The validator therefore looked in a directory that had never existed, found no
+partitions, and reported the corpus healthy.
+
+The whole suite passed, **including a test written specifically to assert that every check actually
+runs against a populated corpus** — because the fixture had independently hard-coded the same wrong
+path. Two copies of the same mistaken assumption agreed with each other, and the disagreement with
+reality was invisible until a real corpus was pointed at the code.
+
+**How to apply.** When a test needs to know where the code writes, what it names things, or how it
+lays data out, get that from the code — call its `store()`, import its constant — rather than
+restating it in the fixture. A restated layout is a second source of truth that can only ever agree
+by luck, and it fails in the direction that looks like success. Where a value must be shared between
+a writer and a reader, export it from the writer as a named constant so both sides import one thing.
+Relatedly, prefer running at least one check against genuine data before believing a green suite —
+see [[C12]] on tests that pass without exercising what they claim.

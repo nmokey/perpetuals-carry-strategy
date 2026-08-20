@@ -18,9 +18,11 @@ import pytest
 from perpcarry.ingestion import binance_archive as archive
 from perpcarry.ingestion.download import ChecksumMismatch, DownloadError
 from perpcarry.ingestion.fetch_trades import (
+    MAX_ID_SKIP,
     SCHEMA,
     TradeDataError,
     backfill,
+    classify_gaps,
     duplicate_trade_ids,
     fetch_day,
     months_between,
@@ -335,14 +337,45 @@ def test_klines_volume_verifies_the_published_checksum():
         klines_volume(SYMBOL, "2026-08-01", client=client)
 
 
-def test_backfill_refuses_a_month_with_a_gap(tmp_path, raw):
-    punched = raw.drop(index=5)
+def test_backfill_refuses_a_month_with_a_large_gap(tmp_path, raw):
+    """A run longer than MAX_ID_SKIP is suspected data loss, not venue noise."""
+    punched = raw.drop(index=range(5, 5 + MAX_ID_SKIP + 1))
     csv = punched.to_csv(index=False).encode()
 
-    with archive_client(csv) as client, pytest.raises(TradeDataError, match="trade_id gap"):
+    with archive_client(csv) as client, pytest.raises(TradeDataError, match="suspected data loss"):
         backfill(SYMBOL, dt.date(2026, 8, 1), dt.date(2026, 8, 1), root=tmp_path, client=client)
 
     assert not (tmp_path / "trades").exists(), "a gapped month must not be stored"
+
+
+def test_backfill_accepts_an_isolated_venue_id_skip(tmp_path, raw):
+    """Contiguity is not a real invariant for this venue.
+
+    0GUSDT 2026-06 has 154 such skips across 2.37M trades and still reconciles exactly
+    against klines volume, so refusing them would reject sound data. Verified 2026-08-20;
+    see MAX_ID_SKIP.
+    """
+    punched = raw.drop(index=5)
+    csv = punched.to_csv(index=False).encode()
+
+    with archive_client(csv) as client:
+        backfill(SYMBOL, dt.date(2026, 8, 1), dt.date(2026, 8, 1), root=tmp_path, client=client)
+
+    assert (tmp_path / "trades").exists()
+    assert len(read_parquet(tmp_path / "trades")) == len(punched)
+
+
+def test_a_skip_and_a_loss_are_classified_apart():
+    skips, losses = classify_gaps([(10, 12), (100, 100 + MAX_ID_SKIP + 2)])
+
+    assert skips == [(10, 12)]
+    assert losses == [(100, 100 + MAX_ID_SKIP + 2)]
+
+
+def test_the_skip_threshold_is_inclusive():
+    skips, losses = classify_gaps([(0, MAX_ID_SKIP + 1), (0, MAX_ID_SKIP + 2)])
+
+    assert len(skips) == 1 and len(losses) == 1
 
 
 # --- storage round trip (criteria 4, 5) --------------------------------------

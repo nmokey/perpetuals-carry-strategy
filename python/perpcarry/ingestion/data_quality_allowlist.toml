@@ -1,0 +1,36 @@
+# Acknowledged data-quality gaps (design-doc M1-T4, Q2).
+#
+# The acceptance criterion says "zero *unexplained* gaps". Some gaps are real and
+# legitimate -- venue downtime, a symbol's listing date, an upstream hole. Those are
+# recorded here with a reason and the date someone looked at them; anything not listed
+# fails the validator.
+#
+# This is a committed file rather than a runtime flag for two reasons: it is reviewable in
+# diffs, and it is the source for the M9 writeup's data-caveats section. A gap waved away
+# at the command line would leave the writeup's caveats undocumented.
+#
+# Fields
+#   dataset       one of: trades, funding, book, book_snapshot
+#                 (the *storage* directory, not the archive dataset name)
+#   symbol        the affected symbol
+#   check         optional; omit to acknowledge any check failing in this range
+#   start / end   optional ISO dates, inclusive; omit both to cover the whole history
+#   reason        why this gap is expected -- prose, for the writeup
+#   acknowledged  the date someone actually looked at it
+#
+# Adding an entry is a claim that you investigated and the gap is benign. It is not a way
+# to quiet a check.
+
+[[gap]]
+dataset = "funding"
+symbol = "1000BONKUSDT"
+check = "funding_settlement_count"
+start = "2026-06-24"
+end = "2026-06-24"
+reason = """
+Upstream hole in the Binance funding archive: 179 settlements published for 2026-06 where \
+the 4h cadence implies 180, with an 8h gap after 2026-06-24 00:00 UTC. Verified against \
+the archive on 2026-08-12; the file is complete as published, so this is missing at the \
+source rather than a fetch defect. Re-checking will not recover it.\
+"""
+acknowledged = "2026-08-12"

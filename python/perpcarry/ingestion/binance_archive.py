@@ -10,6 +10,7 @@ data, which is not.
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 BASE = "https://data.binance.vision/data/futures/um"
 
@@ -63,3 +64,39 @@ KLINE_COLUMNS = [
     "taker_buy_quote_volume",
     "ignore",
 ]
+
+
+#: A klines archive names its interval where other datasets name themselves:
+#: ``0GUSDT-1m-2026-06-01.zip`` against ``0GUSDT-trades-2026-06.zip``.
+_INTERVAL = re.compile(r"\d+[smhdwM]")
+
+
+def url_for_filename(name: str) -> str | None:
+    """Reconstruct the source URL of a cached archive from its filename.
+
+    ``None`` when the name does not parse -- the caller must report that rather than skip
+    it. Guessing a URL and letting the 404 fall through as "nothing to verify" turns an
+    integrity check into a no-op that still reports success.
+    """
+    stem = name[: -len(".zip")] if name.endswith(".zip") else name
+    parts = stem.split("-")
+    if len(parts) < 3:
+        return None
+
+    symbol, kind = parts[0], parts[1]
+    period = "-".join(parts[2:])
+
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", period):
+        monthly = False
+    elif re.fullmatch(r"\d{4}-\d{2}", period):
+        monthly = True
+    else:
+        return None
+
+    if _INTERVAL.fullmatch(kind):
+        return (
+            klines_monthly_url(symbol, period, kind)
+            if monthly
+            else klines_daily_url(symbol, period, kind)
+        )
+    return monthly_url(kind, symbol, period) if monthly else daily_url(kind, symbol, period)

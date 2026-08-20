@@ -1,7 +1,10 @@
 # M1-T4 — Data validation / QA pass
 
 **Milestone:** M1
-**Status:** Ready to implement — all open questions resolved 2026-08-12.
+**Status:** **Complete 2026-08-20.** `validate_data.py` + committed
+`data_quality_allowlist.toml`; 43 tests, 26/26 mutations caught. Validated against a real
+assembled corpus (0GUSDT, June 2026): 354 checks, zero failures. Two spec assumptions turned
+out wrong — `trade_id` contiguity (D-015) and the allowlist format (D-016).
 **Depends on:** M1-T1, M1-T2, M1-T3, M1-T5
 **Design doc:** Section 3, Section 4.1, Section 5 (M1)
 

@@ -64,6 +64,12 @@ DATASET_DIRS = {
 #: Hive partitioning carries in the path rather than the file.
 SCHEMA = pa.schema(
     [
+        # Kept rather than dropped as a constant: this is the only field anywhere in the
+        # corpus that records which venue a row came from, and M1-T4's single-venue check
+        # needs something data-derived to test. The vendor's URL shape serves every
+        # exchange it carries, so a typo in the exchange segment yields a valid file from
+        # the wrong venue -- which the design doc calls fatal to the result.
+        ("exchange", pa.string()),
         ("timestamp", pa.int64()),
         ("local_timestamp", pa.int64()),
         ("latency_us", pa.int64()),
@@ -77,6 +83,7 @@ SCHEMA = pa.schema(
 #: Long form for the wide ``book_snapshot_25`` reference -- see :func:`normalise_snapshot`.
 SNAPSHOT_SCHEMA = pa.schema(
     [
+        ("exchange", pa.string()),
         ("timestamp", pa.int64()),
         ("local_timestamp", pa.int64()),
         ("latency_us", pa.int64()),
@@ -220,6 +227,7 @@ def normalise(raw: pd.DataFrame, symbol: str, date: dt.date | str) -> pd.DataFra
     timestamp_us, local_us = _timestamps(raw)
     frame = pd.DataFrame(
         {
+            "exchange": raw["exchange"].astype("string").str.strip(),
             "timestamp": timestamp_us // 1000,
             "local_timestamp": local_us // 1000,
             "latency_us": local_us - timestamp_us,
@@ -270,6 +278,7 @@ def normalise_snapshot(raw: pd.DataFrame, symbol: str, date: dt.date | str) -> p
     timestamp_us, local_us = _timestamps(raw)
     base = pd.DataFrame(
         {
+            "exchange": raw["exchange"].astype("string").str.strip(),
             "timestamp": timestamp_us // 1000,
             "local_timestamp": local_us // 1000,
             "latency_us": local_us - timestamp_us,

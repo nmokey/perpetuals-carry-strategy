@@ -41,6 +41,13 @@ log = logging.getLogger(__name__)
 
 DATASET = "fundingRate"
 
+#: Storage directory under the data root. **Deliberately not** ``DATASET``: that is the
+#: *archive's* name for the dataset and appears in URLs, while this is where the
+#: normalised rows live. Anything locating funding partitions must use this constant --
+#: assuming the two are the same silently finds nothing, which reads as an empty corpus
+#: rather than as a wrong path.
+STORAGE_DIR = "funding"
+
 #: Output schema per design doc Section 3.3 (plus the ``date`` partition key).
 #: Note what is absent: ``mark_price``. The venue does not publish it alongside funding
 #: history and it is unused before M7-T4, so it is not emitted -- not even as null.
@@ -170,7 +177,7 @@ def fetch_month(
 
 def store(frame: pd.DataFrame, *, root: Path | None = None) -> Path:
     """Write normalised funding to the partitioned Parquet dataset. Idempotent."""
-    dest = (root if root is not None else data_root()) / "funding"
+    dest = (root if root is not None else data_root()) / STORAGE_DIR
     return write_parquet(frame, dest, partition_cols=PARTITION_COLS)
 
 

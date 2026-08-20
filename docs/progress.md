@@ -9,7 +9,7 @@ Milestone status at a glance:
 | Milestone | Status |
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
-| M1 — Data acquisition | In progress — T1, T2, T3, T5 complete; T4 specced and ready |
+| M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,69 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-20
+
+### M1 complete — T4 data validation, and a broken invariant it exposed
+
+`ingestion/validate_data.py` plus the committed `ingestion/data_quality_allowlist.toml`. 43 tests;
+suite now 251 offline + 6 network, all green. **26/26 mutations caught.** 15 checks across
+integrity, completeness, consistency, plausibility and the order book.
+
+**Validated against a real assembled corpus**, not just fixtures: 0GUSDT June 2026 — 30 trade days
+(2.37M trades), 30 funding days (180 settlements), one book day (1.3M rows) and its reference.
+**354 checks, zero failures**, including the exact klines volume reconciliation on all 30 days.
+
+**The headline finding: `trade_id` contiguity is not a property of this venue, and never was.**
+Building that corpus was the first time a *full month* went through `fetch_trades.backfill`, and it
+refused immediately — 154 gaps in 0GUSDT 2026-06. Characterised: 157 absent ids across 2,366,674
+trades, every run 1 or 2 long, no duplicates, no time discontinuity. The decisive test was the
+independent one — on 2026-06-01 (4 gaps) and 2026-06-15 (6 gaps) summed trade quantity equals
+summed 1m klines volume **exactly**. Ids are skipped; trades are not lost.
+
+So the design doc's M1-T1 criterion was unsatisfiable, audit assumption A7 was false, and both the
+fetcher and this validator were enforcing a rule real data does not obey. All four are corrected
+(D-015): gaps are now classified against `MAX_ID_SKIP`, with the klines equality carrying the
+actual completeness guarantee. The general lesson is the one worth keeping — **an invariant
+confirmed on a sample is a hypothesis, not a property.** A7 had been checked against a 200-row
+fixture and a few days; the first full month falsified it.
+
+**A second bug, and this one my tests were actively hiding.** The validator located funding
+partitions with `fetch_funding.DATASET`, which is `"fundingRate"` — the *archive's* name, appearing
+in URLs. The fetcher stores under `funding/`. So the validator looked in a directory that never
+existed, found zero partitions, and reported everything fine. It passed the whole suite, including
+a test whose stated purpose was that every check actually runs, because **the fixture had hard-coded
+the same wrong path**. It only surfaced when a real corpus was pointed at it.
+
+Fixed structurally rather than by correcting the constant: both fetchers now export a `STORAGE_DIR`
+the validator reads, and the fixture builds its corpus by calling the fetchers' own `store()`
+functions, so a future divergence fails loudly. Recorded as C15.
+
+Also corrected: the allowlist is TOML rather than the spec's YAML (D-016) — `tomllib` is stdlib
+where PyYAML would be a new runtime dependency for one config file. And the book schemas now keep
+the vendor's `exchange` column, which was previously discarded; it is the only venue-tagged field
+anywhere in the corpus, and without it the spec's "a mixed-venue corpus is rejected" test had
+nothing to test. The validator is explicit that trades and funding cannot be checked this way and
+reports those as skipped rather than passed.
+
+**The pre-push audit found the checksum check was a no-op**, which is the finding worth keeping
+because of what it was a no-op *about*. `archive_checksums` built its URL as
+`{BASE}/{filename}` — but the archive nests by period, dataset and symbol
+(`{BASE}/monthly/trades/0GUSDT/...`), so every request 404'd, `fetch_checksum` returned `None` for
+a missing `.CHECKSUM`, and the loop skipped the file. All 42 cached archives were skipped, the
+check yielded **zero results**, and the report read clean.
+
+That is precisely the false confidence the module's own docstring is about — written into the one
+check whose entire job is integrity. It survived because nothing tested the opt-in network path,
+and because a check that yields nothing looks identical to a check that yields all-passes.
+
+Fixed by reconstructing the URL from the filename (`binance_archive.url_for_filename`, which has
+to handle klines naming their *interval* where every other dataset names itself), and by making an
+unverifiable file a **reported failure** rather than a silent skip — being unable to verify a file
+is not the same as the file being sound. Verified against the real cache: 42 archives, 42 results,
+all passing, where it previously produced none.
+
+**Network checks are opt-in and reported as skipped, never as passes** — archive checksum
+re-verification and the klines reconciliation both need a live host, and a gate that silently
+reports success without running is the false confidence this task exists to prevent.
 
 ### M1-T3 complete — historical L2 order book acquisition
 

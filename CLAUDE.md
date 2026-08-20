@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0 complete (T1–T6). M1 in progress: T1 (trades), T2 (funding), T3 (order book) and T5 (symbol metadata) complete; T4 specced and ready.** Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` and `ingestion/tardis_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`, `ingestion/fetch_book.py`, `ingestion/derive_symbol_meta.py` + the committed `ingestion/symbol_meta.json`. ~204 offline + 6 network tests, CI green on Linux and macOS.
+**M0 complete (T1–T6). M1 complete (T1–T5).** Next up is M2 (C++ order book reconstruction). Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` and `ingestion/tardis_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`, `ingestion/fetch_book.py`, `ingestion/derive_symbol_meta.py` + the committed `ingestion/symbol_meta.json`, `ingestion/validate_data.py` + `ingestion/data_quality_allowlist.toml`. ~251 offline + 6 network tests, CI green on Linux and macOS.
 
 **Vendor book data is licence-restricted and the rules are stricter than C9.** Tardis Clause 9.2(2) forbids redistributing raw rows: never commit a book fixture, never let book data reach CI, never publish anything from which a book could be reconstructed. Fitted coefficients and capacity curves are fine. Every fixture in `tests/ingestion/test_fetch_book.py` is synthetic for this reason, and a test enforces it.
 
 Tick and step sizes are **committed data, not computed at runtime** — read them from `symbol_meta.json` via `derive_symbol_meta.load_table()`. A value that silently changed between runs would make backtests irreproducible. Currently `0GUSDT`, `BTCUSDT`, `ETHUSDT`; the table grows when OD-3 picks the study symbols.
 
-Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages, and M1's `fetch_book.py` and `validate_data.py`.
+Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages.
 
 **Nothing needs to run continuously.** Every source is a static historical archive, so there is no recorder, no daemon, and no data that decays while a decision is pending.
 

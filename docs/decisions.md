@@ -308,3 +308,51 @@ column names; and DuckDB can query it without quoting every identifier.
 
 **Depth is read from the columns, not assumed to be 25.** The dataset is named for 25 levels;
 trusting the name over the file is how a silently truncated schema gets ingested.
+
+---
+
+## D-015 — `trade_id` contiguity is not a venue invariant (2026-08-20)
+
+**Context.** M1-T1's acceptance criterion, the audit's assumption A7, `fetch_trades.backfill`'s
+hard refusal, and M1-T4's continuity check all rested on "`trade_id` is contiguous in the `trades`
+dataset". Building the first real corpus for M1-T4 hit it immediately: `backfill` refused
+`0GUSDT` 2026-06 with **154 gaps**.
+
+**The measurement.** 154 gaps across 2,366,674 trades — 157 absent IDs, every run 1 or 2 long, no
+duplicates, no time discontinuity around them. Then the decisive independent test: on 2026-06-01
+(4 gaps) and 2026-06-15 (6 gaps), summed trade quantity equals summed 1m `klines` volume
+**exactly**. IDs are skipped; trades are not lost.
+
+**Decision.** Contiguity is dropped as an invariant. `fetch_trades.MAX_ID_SKIP = 8` separates
+venue id-skips from suspected data loss: runs at or below it are counted and reported, runs above
+it fail. The threshold is an early-warning heuristic — **the completeness guarantee is the klines
+reconciliation**, which is exact and independently sourced.
+
+**Why not allowlist them.** 154 per symbol-month is systematic behaviour, not an incident. The
+allowlist exists for gaps someone investigated and found benign; an entry regenerated every month
+would be a rubber stamp, and would drown the one real entry it already holds.
+
+**Why not just drop the check.** A wholly missing day is still a boundary jump of tens of
+thousands, which this still catches — and that is the failure the check was really for. Keeping a
+loosened version costs nothing and preserves the detection that matters.
+
+**The general lesson.** An invariant confirmed on a sample is a hypothesis, not a property. A7 was
+verified against a 200-row fixture and a handful of days; the first full month falsified it. Where
+an invariant is load-bearing, either verify it at the scale it will be relied on or write the code
+to measure it rather than assume it.
+
+**Applied to.** Design doc M1-T1 criterion, audit A7, `fetch_trades`, `validate_data`.
+
+---
+
+## D-016 — the data-quality allowlist is TOML, not YAML (2026-08-20)
+
+**Context.** M1-T4's Q2 resolved to a committed `data_quality_allowlist.yaml`.
+
+**Decision.** Same file, same contents, TOML instead — `data_quality_allowlist.toml`.
+
+**Why.** YAML would mean adding PyYAML as a runtime dependency for one small config file, whereas
+`tomllib` is in the standard library from 3.11 and the project already pins 3.12 (D-005/D-008).
+TOML keeps the comments the file needs — its whole purpose is prose reasons reviewable in diffs —
+and matches the project's existing config language. The spec named YAML as a format, not as a
+requirement; nothing else depends on the choice.

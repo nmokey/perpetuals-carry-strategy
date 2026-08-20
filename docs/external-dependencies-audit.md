@@ -144,11 +144,25 @@ M2-T2/M2-T3 should be rewritten around it.
 200) and carries per-interval volume. Note the path has an **interval subdirectory** that the
 naive pattern misses.
 
-### A7 — `trade_id` gaps. Holds only for one dataset.
+### A7 — `trade_id` gaps. **Broken — corrected 2026-08-20.**
 
-Contiguous in `trades`; **not** in `aggTrades`, where IDs are aggregation indices and gaps are
-expected by design. M1-T1 must use `trades`, or the criterion must be relaxed to monotonicity.
-Do not switch datasets while leaving the criterion as written.
+The original finding said `trade_id` is contiguous in `trades` and only gapped in `aggTrades`
+(where IDs are aggregation indices). **The first half is wrong.** Measured on the full
+`0GUSDT` 2026-06 month: 154 gaps across 2,366,674 trades, 157 absent IDs, every run 1 or 2 long,
+no duplicates, no time discontinuity.
+
+The decisive test was the independent one: on 2026-06-01 (4 gaps) and 2026-06-15 (6 gaps) the
+summed trade quantity still equals the summed 1m `klines` volume **exactly**. IDs are skipped;
+trades are not lost. Contiguity is therefore not a property of this feed and never was — the
+original probe simply did not look at enough data to see it.
+
+Consequences, all applied: M1-T1's acceptance criterion is reworded (contiguity → no *runs* of
+absent IDs beyond `fetch_trades.MAX_ID_SKIP`, with the klines equality carrying the real
+completeness guarantee); `fetch_trades.backfill` classifies gaps instead of refusing any;
+M1-T4's `trade_id_continuity` check does the same. `aggTrades` remains unusable for this purpose.
+
+The general lesson is recorded as D-015: **an invariant confirmed on a sample is a hypothesis, not
+a property** — and here the sample was one 200-row fixture and a few days.
 
 ### A8 — "Published funding calendar". No such artifact.
 
