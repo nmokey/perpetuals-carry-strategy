@@ -254,3 +254,57 @@ replay throughput disappoints.
 
 **Follow-through.** §2's diagram now routes the storage → core edge through the Python layer.
 M2-T2 and M3-T1 specs should state that the replayer's input is an in-memory batch, not a path.
+
+---
+
+## D-013 — book timestamps normalised to ms; capture latency kept in µs (2026-08-20)
+
+**Context.** M1-T3. The vendor emits `timestamp` and `local_timestamp` in **microseconds**;
+§3.2 says normalise to milliseconds to match every other dataset in §3. But the gap between the
+two columns *is* the vendor's observed capture latency, and §3.2 does not say what unit
+`local_timestamp` ends up in — normalising one and not the other leaves two columns in different
+units on the same row, and normalising both quantises the gap.
+
+**Decision.** Both columns are stored in milliseconds. The difference is computed from the raw
+microsecond values *before* the conversion and stored as a third column, `latency_us`.
+
+**Why, with the measurement.** On 0GUSDT 2026-06-01: p1 1.48 ms, median 2.04 ms, p99 516 ms.
+So the latency is *not* sub-millisecond, and converting first would not erase it — but **99.8% of
+rows are not a whole number of milliseconds**, so the microsecond detail would be lost on
+essentially every row. One extra int64 column is a cheap price for not throwing that away, and the
+alternative (mixed units per row) is the kind of thing that produces a wrong number two milestones
+later with nothing to point at.
+
+**Note for M9.** This latency is the *vendor's* capture latency, not the exchange's. It bounds what
+the data can support: a median of ~2 ms with a 516 ms tail is not a basis for latency-sensitive
+claims, which the design doc already says the project does not make.
+
+---
+
+## D-014 — `book_snapshot_25` is melted to long form on ingest (2026-08-20)
+
+**Context.** M1-T3 specified `book_snapshot_25` as the independent reference for validating replay
+(M2-T2), and implicitly assumed it shared `incremental_book_L2`'s shape. **It does not**, and the
+spec did not say so — discovered when the first real ingest failed with "missing columns ['amount',
+'is_snapshot', 'price', 'side']". It is a **wide** 104-column table: one row per book image, with
+`asks[0].price` … `bids[24].amount` as separate columns.
+
+**Decision.** Melt it on ingest to one row per level: `timestamp, local_timestamp, latency_us,
+side, level, price, quantity`, stored under `data/book_snapshot/`.
+
+**Why.** It shares a vocabulary with every other dataset in §3; M2-T2's "replayed top-25 match the
+reference" becomes a join on `(timestamp, side, level)` rather than a reshape of 104 bracketed
+column names; and DuckDB can query it without quoting every identifier.
+
+**Two consequences worth stating.**
+
+1. Melting multiplies row count by up to 50, so the read chunk size is divided by the same factor
+   for this dataset — otherwise the bounded-memory property is lost exactly where the files are
+   largest. Measured: 0GUSDT 2026-06-01 is 277,590 images → 13,879,500 rows, 11.0 MB on disk.
+2. **Empty trailing levels are dropped**, because a book thinner than 25 levels leaves them blank
+   and a level that does not exist is not a level with an unknown price. This is the *opposite* of
+   the incremental feed's `amount = 0`, which is meaningful and must be preserved. Conflating the
+   two conventions would either invent phantom levels here or destroy removals there.
+
+**Depth is read from the columns, not assumed to be 25.** The dataset is named for 25 levels;
+trusting the name over the file is how a silently truncated schema gets ingested.

@@ -1,8 +1,10 @@
 # M1-T3 — Order book historical data acquisition
 
 **Milestone:** M1
-**Status:** Draft — ready to implement. Unblocked 2026-08-12 by OD-2's resolution; licence read and
-all open questions resolved the same day.
+**Status:** **Complete 2026-08-20.** `fetch_book.py` + `tardis_archive.py`; 61 tests (59 offline,
+2 network), 19/19 mutations caught. Two spec assumptions turned out wrong and are recorded as
+D-014 (`book_snapshot_25` is wide, not long) and in the progress log (the vendor's URLs collide
+in a filename-keyed download cache).
 **Depends on:** M0-T4, M0-T6, OD-1 (resolved: Binance USD-M), OD-2 (resolved: vendor free tier)
 **Design doc:** Section 3.2, Section 4.1, OD-2, Risk R1
 

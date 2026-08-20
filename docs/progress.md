@@ -9,7 +9,7 @@ Milestone status at a glance:
 | Milestone | Status |
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
-| M1 — Data acquisition | In progress — T1, T2, T5 complete; T3, T4 specced and ready |
+| M1 — Data acquisition | In progress — T1, T2, T3, T5 complete; T4 specced and ready |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,65 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-20
+
+### M1-T3 complete — historical L2 order book acquisition
+
+`ingestion/fetch_book.py` + `ingestion/tardis_archive.py`. 61 tests (59 offline, 2 network); suite
+now 204 offline + 6 network, all green. **19/19 mutations caught.** This is the data the project's
+central claim rests on — that execution costs are *calibrated* rather than assumed — so the
+fidelity obtained here bounds what M9 may honestly assert.
+
+Verified against real vendor data (0GUSDT 2026-06-01): 1,299,113 incremental rows in 3 chunks,
+19,799 snapshot rows, 63,764 removals, 13 resync events; and 277,590 book images melted to
+13,879,500 reference rows. 10.2 MB + 11.0 MB on disk.
+
+**Two spec assumptions were wrong, and both failed loudly only because a guard existed.**
+
+**`book_snapshot_25` is not shaped like the incremental feed.** The spec listed it as the
+validation reference without saying it is a **wide 104-column table** — one row per book image with
+`asks[0].price` … `bids[24].amount` as columns — not one row per level update. The first real run
+died with "missing columns ['amount', 'is_snapshot', 'price', 'side']". It is now melted to long
+form on ingest (D-014), which turns M2-T2's comparison into a join rather than a reshape of 104
+bracketed names. Melting multiplies rows by up to 50, so the read chunk shrinks by the same factor
+for that dataset — otherwise the bounded-memory property is lost exactly where the files are
+largest.
+
+**Every vendor URL for a symbol ends in the same basename.** The date lives in the path
+(`.../2026/06/01/0GUSDT.csv.gz`), and `cached_fetch` keys its cache on the filename — so a 24-month
+backfill would have downloaded June once and served that same file for all 24 months, and for both
+datasets. Silent, and it survives every schema and integrity check. The Binance archive never
+exposed this because its filenames carry the date. Caught by the stray-day guard, which existed for
+an unrelated reason: a mismatched day tripped it, and the mismatch was the cache. `cache_path` now
+builds the key from dataset, symbol and date, and three tests pin it.
+
+Worth recording as the general lesson: **a guard written for one failure mode caught a different
+one.** The stray-day check was defending against misfiling rows into the wrong partition; what it
+actually found was a caching bug two layers away. Cheap invariants pay out in places you did not
+plan for.
+
+**Two things the review then corrected, both about honesty of reporting rather than correctness.**
+
+`resyncs` counted *rows*, not events. A real resync is one ~1,400-row book image, so the day read
+as "18,396 resyncs" when the true figure is **13**. Nothing computed a wrong number, but M2 reads
+this field to decide how often its replayer must reset state, and three orders of magnitude is not
+a rounding difference. Now `resync_events` and `resync_rows`, with a test that a block split across
+a chunk boundary still counts once.
+
+And the docstring justifying D-013 claimed the vendor's capture latency is "frequently
+sub-millisecond". Measured, it is not: p1 1.48 ms, median 2.04 ms, p99 516 ms. The decision to keep
+`latency_us` still stands, but for the accurate reason — **99.8% of rows are not a whole number of
+milliseconds**, so converting first loses the detail on essentially every row. The claim now matches
+the measurement.
+
+**Licence handling.** Every fixture in the test module is synthetic, which is a licence requirement
+rather than a style choice: Clause 9.2(2) forbids redistributing raw rows, and committing a real
+book day would publish vendor data through the repo and push it into CI. There is a test asserting
+no vendor book fixture is ever committed, and the two tests that touch real vendor data are marked
+`network` so they never run in CI (C10).
+
+**Not done, deliberately.** The 24-month bulk pull. The spec's Q1 says to exercise the pipeline on
+a few months before committing to ~10.8 GB for BTC, and that is now possible — but it is a large
+download and belongs in a deliberate run, not a side effect of finishing the task.
 
 ### M1-T5 complete — symbol tick/step derivation
 
@@ -59,7 +118,7 @@ distinct-price counts and trade counts, for both `0GUSDT` and `ETHUSDT` across a
 That is the strongest available evidence the implementation matches what was measured by hand on
 2026-08-12, since the spec's numbers were produced by a different throwaway probe.
 
-Added `BTCUSDT` (tick `0.1`, step `0.001`, 11.7M trades, 68,703 distinct prices) — it is the
+Added `BTCUSDT` (tick `0.1`, step `0.001`, 11.7M trades, 65,187 distinct prices) — it is the
 symbol whose book data M2–M4 replays, and the design doc never listed its tick as a dependency
 either. Symbol coverage stops there deliberately: OD-3 is open and deferred to M8, so the table
 grows when the study symbols are chosen.

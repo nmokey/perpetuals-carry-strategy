@@ -239,3 +239,27 @@ other choice that equality cannot see, assert it on freshly produced output, nev
 artifact that a previous good run wrote. Ask: *if I deleted the line that does this, would the
 fixture still make my test pass?* See also [[C12]] — this is the same failure mode as a mutation
 surviving, found the same way.
+
+---
+
+## C14 — Cheap invariants pay out where you did not aim them
+
+Learned 2026-08-20, from M1-T3.
+
+`fetch_book` checks that every row in a downloaded day carries that day's UTC date. It was written
+for one reason: the whole file is written into a single Hive partition directory, so a stray row
+would be misfiled rather than landing in its own partition. That is a narrow, slightly paranoid
+guard against something the vendor was already verified not to do.
+
+What it actually caught was a **caching bug two layers away**. Every Tardis URL for a symbol ends
+in the same basename — the date is in the path — so a filename-keyed download cache served June's
+file for July. Nothing about that is a date-column problem, and no schema, checksum or integrity
+check could see it: the file was a perfectly valid book day, just the wrong one. The stray-day
+guard tripped because the rows said June and the request said July.
+
+**How to apply.** When a check is cheap and the property is genuinely invariant, write it even when
+the failure it names looks impossible — its value is not confined to the mode you had in mind. Two
+corollaries: state the invariant in terms of *what must be true*, not *what you fear went wrong*,
+because that is what makes it catch unrelated causes; and when such a guard fires, do not assume
+the cause is the one in its error message. See [[C12]] for the complementary discipline — proving a
+test fails on the defect it was aimed at.
