@@ -35,27 +35,6 @@ question, not a technical workaround.
 
 ---
 
-### B-007 — Symbol metadata (tick size, step size) has no specified source
-
-**Blocks.** M2 (price-level granularity), M4-T3 (lot normalisation), M7-T2 (sizing) — none of
-which the design doc notes as needing it.
-
-**Verified 2026-08-12.** `exchangeInfo` geo-blocked; archive has no metadata tree; Tardis's
-instruments API is paid-only (`"available only for active pro and business subscriptions"`).
-
-**Workaround verified.** Infer from the trades archive via GCD of distinct observed prices and
-quantities — on `0GUSDT` this recovers tick `0.0001`, step `1`, stable across three disjoint days;
-`ETHUSDT` gives `0.01` / `0.001`. Scale by the **maximum** observed decimal exponent, not the
-minimum — getting that backwards silently truncates precision by 100× (it did, in the first probe).
-
-Caveat: it recovers *observed* granularity, which equals the true tick only with enough distinct
-prices; compute over a long window and commit the result rather than deriving it ad hoc.
-
-**Will be resolved by** M1-T5 — specced 2026-08-12, not yet implemented. Cross-window stability is
-its acceptance criterion.
-
----
-
 ## Watch list
 
 Not blocking yet; will bite at the milestone named.
@@ -83,6 +62,43 @@ Not blocking yet; will bite at the milestone named.
 ---
 
 ## Resolved
+
+### B-007 — symbol tick/step size had no obtainable source — **resolved 2026-08-20**
+
+Resolved by implementing M1-T5. `derive_symbol_meta.py` recovers the grid by GCD over observed
+trades and commits it to `python/perpcarry/ingestion/symbol_meta.json`:
+
+| Symbol | Tick | Step | Windows | Trades | Distinct prices |
+|---|---|---|---|---|---|
+| `0GUSDT` | `0.0001` | `1` | 2026-03-02, 2026-07-15, 2026-08-01 | 726,893 | 773 |
+| `BTCUSDT` | `0.1` | `0.001` | same | 11,680,353 | 65,187 |
+| `ETHUSDT` | `0.01` | `0.001` | same | 19,517,566 | 26,835 |
+
+Distinct-price counts are the **union** across the three windows, not the sum of their per-window
+counts — see the 2026-08-20 progress entry for why that distinction mattered.
+
+Every `0GUSDT` and `ETHUSDT` figure reproduces the hand-verified table in the spec exactly —
+tick, step, per-window distinct-price counts and trade counts. `BTCUSDT` is new here; it is the
+symbol whose book data M2–M4 replays, and the design doc never listed its tick as a dependency
+either.
+
+The three consumers (M2 price-level granularity, M4-T3 lot normalisation, M7-T2 sizing) can now
+read a committed value instead of deriving one ad hoc — which matters because a value that
+silently changed between runs would make backtests irreproducible.
+
+**The residual limitation is unchanged and is not closed by this.** The GCD recovers *observed*
+granularity, which equals the true tick only when enough distinct values occurred; it can
+overestimate on a thin window and can never underestimate. The code reports a `confident` flag and
+refuses to commit a low-confidence estimate rather than returning a plausible wrong number. For
+any thin symbol this still deserves an explicit caveat in the M9 writeup.
+
+Two things this does **not** cover, both out of scope by the spec and both real: contract
+multiplier and minimum notional (not derivable this way; M7-T2 will hit a second metadata gap),
+and historical re-ticking (the table holds one current value per symbol; cross-window disagreement
+is raised as an error rather than resolved by taking the finest value, precisely because a
+disagreement may mean a re-tick rather than a thin window).
+
+---
 
 ### B-006 — no machine-readable historical fee schedule — **resolved 2026-08-12, filed 2026-08-20**
 

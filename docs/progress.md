@@ -9,7 +9,7 @@ Milestone status at a glance:
 | Milestone | Status |
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
-| M1 — Data acquisition | In progress — T1, T2 complete; T3–T5 specced and ready |
+| M1 — Data acquisition | In progress — T1, T2, T5 complete; T3, T4 specced and ready |
 | M2 — Order book reconstruction (C++) | Not started |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
@@ -23,6 +23,77 @@ Milestone status at a glance:
 ---
 
 ## 2026-08-20
+
+### M1-T5 complete — symbol tick/step derivation
+
+`ingestion/derive_symbol_meta.py` plus the committed `ingestion/symbol_meta.json`. 48 tests (47
+offline, 1 network); suite now 144 offline + 4 network, all green. **14/14 mutations caught.**
+Resolves B-007, which had been blocking M2, M4-T3 and M7-T2 with no obtainable authoritative
+source.
+
+**The pre-push audit found the confidence logic was counting its own evidence wrong**, and this is
+the finding worth keeping. `combine` pooled windows by **summing** their per-window distinct
+counts, so a price observed on all three days counted as three pieces of evidence. The threshold
+it feeds is justified by a probability argument over *distinct* values, so the error inflated
+confidence — and it inflated it most where the windows overlap most, which is precisely where they
+are least independent. Wrong direction, quietly.
+
+It also meant the committed `distinct_prices` field did not hold a distinct count, and a second,
+smaller version of the same bug sat underneath: deduplication was on the CSV *text*, so an archive
+emitting both `1.0` and `1.00` would have counted one grid point twice.
+
+Fixed by carrying the distinct observations themselves through `GridEstimate` and pooling by union,
+with dedup on numeric value. The corrected counts, re-derived: `BTCUSDT` 68,703 → 65,187 distinct
+prices, `ETHUSDT` 30,995 → 26,835, and quantities roughly halved (`ETHUSDT` 99,215 → 49,412) since
+trade sizes repeat across days far more than prices do. **No tick or step value changed and all
+three symbols remain confident by a wide margin** — the conclusions were never at risk, but the
+reported evidence was overstated by up to 2x.
+
+Worth noting what did *not* catch it: 12/12 mutations, a full suite, and a network test that
+agreed with hand-verified values. Every one of those checks the value; none checked whether the
+number attached to *how much we should believe it* meant anything. The two mutations added for the
+pooling logic now do.
+
+**The re-derivation reproduced the spec's hand-verified table exactly** — tick, step, per-window
+distinct-price counts and trade counts, for both `0GUSDT` and `ETHUSDT` across all three days.
+That is the strongest available evidence the implementation matches what was measured by hand on
+2026-08-12, since the spec's numbers were produced by a different throwaway probe.
+
+Added `BTCUSDT` (tick `0.1`, step `0.001`, 11.7M trades, 68,703 distinct prices) — it is the
+symbol whose book data M2–M4 replays, and the design doc never listed its tick as a dependency
+either. Symbol coverage stops there deliberately: OD-3 is open and deferred to M8, so the table
+grows when the study symbols are chosen.
+
+**Two bugs found by the tests, both mine, both silent-wrong rather than loud.** The dtype guard
+checked `dtype != object`, which is right for pandas 2 and wrong for pandas 3 — this project runs
+3.0.5, where `read_csv(dtype=str)` yields `StringDtype`, so the guard rejected every real archive
+frame. Now it checks the *element* type, which is the property actually meant. And `sample_days`
+built its month midpoint from 1-based month numbers, putting the middle window a month late and,
+on a single-month range, inventing a second window *after* the end date.
+
+**Design notes worth carrying forward.**
+
+- `decimal_gcd` **rejects** floats rather than converting them. A silent conversion is exactly the
+  bug that produces a plausible number and no error, and `Decimal(0.1)` is not one tenth.
+- Scaling is done on the digit tuple, not `scaleb`, so the active decimal context cannot round a
+  long price on the way through.
+- Confidence is pooled across windows, not judged per window: three thin days that agree are
+  better evidence than any one of them. Below 20 distinct values the estimate is reported
+  low-confidence, and `--write` refuses to commit it.
+- Cross-window disagreement is an **error**, never resolved by taking the finest value. Two
+  different causes produce it — a window too thin to resolve the grid, or the venue re-ticking the
+  symbol mid-study — and they call for opposite responses.
+
+**The mutation run's one survivor was a rendering choice, and closing it needed a different kind
+of test.** Dropping `normalize()` leaves the step size as `1.0` where the grid is `1` — numerically
+identical, so no equality assertion can see it, and my first attempt at a test read the *committed
+file*, which already held the normalised text and passed either way. The test that catches it pins
+the rendering of a freshly derived value. Worth remembering: when the property under test is how a
+value is *written* rather than what it *is*, asserting against the stored artifact tests nothing.
+
+Verified: 141 offline + 4 network green, ruff clean, and the committed JSON confirmed present in a
+built wheel (`wheel.packages` carries package data, but a missing lookup table would only surface
+at M2).
 
 ### Blocker sweep, and B-002 resolved as D-012
 

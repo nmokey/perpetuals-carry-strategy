@@ -216,3 +216,26 @@ Never coerce or normalise a value before comparing it — if the code under test
 assert *that specific change* explicitly so a future change in the behaviour fails loudly. When
 adding tests for a new component, mutate the implementation in a scratch copy and confirm each
 test fails; revert before committing.
+
+---
+
+## C13 — Test the rendering where rendering is the property
+
+Learned 2026-08-20, from M1-T5's one surviving mutation.
+
+Some values matter for how they are *written*, not only for what they *are*. A derived step size
+of `Decimal("1.0")` equals `Decimal("1")` and `Decimal("1E-4")` equals `Decimal("0.0001")`, so no
+equality assertion can distinguish them — but the value is written into a committed file that is
+reviewed in diffs, and unstable rendering is noise on the one artifact whose job is to be stable.
+
+**The trap is subtler than it looks.** The first attempt at a test for this read the *committed
+JSON file* and asserted its strings were canonical. That file already held the normalised text, so
+it passed whether or not the code still normalised — it was asserting a property of a stored
+artifact, not of the code that produces it. The test that actually catches the defect derives a
+fresh value and pins `format(value, "f")`.
+
+**How to apply.** When the property under test is formatting, serialisation, ordering, or any
+other choice that equality cannot see, assert it on freshly produced output, never on a stored
+artifact that a previous good run wrote. Ask: *if I deleted the line that does this, would the
+fixture still make my test pass?* See also [[C12]] — this is the same failure mode as a mutation
+surviving, found the same way.

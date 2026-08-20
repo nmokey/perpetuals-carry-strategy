@@ -254,7 +254,7 @@ Each milestone can, in principle, stop and produce a coherent deliverable on its
 | M1-T2 | Historical funding rate downloader | `fetch_funding.py` | Settlement count equals `24 / funding_interval_hours × days`; consecutive settlements are one interval apart within a ±5s tolerance (source timestamps jitter ~1 ms) | M0-T4, M0-T6 |
 | M1-T3 | Order book historical data acquisition | `fetch_book.py`, pulling Tardis free-tier `incremental_book_L2` | Book state reconstructable at any timestamp within a downloaded day; replayed top-25 levels match the same day's `book_snapshot_25` | M0-T4, M0-T6 |
 | M1-T4 | Data validation/QA pass | `validate_data.py` | Zero *unexplained* gaps, duplicate timestamps, or non-monotonic sequences; every acknowledged gap carries a documented reason in a committed allowlist | M1-T1, M1-T2, M1-T3, M1-T5 |
-| M1-T5 | Symbol metadata derivation | `derive_symbol_meta.py` + committed lookup table | Tick and step size recovered by GCD over a long trades window; recovered values stable across independent windows for the same symbol | M1-T1 |
+| M1-T5 | Symbol metadata derivation | `derive_symbol_meta.py` + committed lookup table | Tick and step size recovered by GCD over trades sampled from disjoint windows spanning the study period; recovered values stable across those windows for the same symbol, and an estimate with too few distinct observations pooled across them is reported low-confidence rather than committed | M1-T1 |
 
 Note the dependency order within M1: T5 precedes T4 despite the numbering, since the QA pass
 validates the derived metadata alongside everything else. T5 is numbered last because it was

@@ -1,7 +1,9 @@
 # M1-T5 — Symbol metadata derivation
 
 **Milestone:** M1
-**Status:** Ready to implement — all open questions resolved 2026-08-12.
+**Status:** **Complete 2026-08-20.** `derive_symbol_meta.py` + committed `symbol_meta.json`
+(`0GUSDT`, `BTCUSDT`, `ETHUSDT`); 42 tests, 12/12 mutations caught. Every measurement in the table
+below reproduced exactly on re-derivation. Resolves B-007.
 **Depends on:** M1-T1
 **Design doc:** Section 5 (M1), OD-1
 

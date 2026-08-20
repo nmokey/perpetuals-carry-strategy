@@ -1,0 +1,50 @@
+{
+  "0GUSDT": {
+    "symbol": "0GUSDT",
+    "tick_size": "0.0001",
+    "step_size": "1",
+    "windows": [
+      "2026-03-02",
+      "2026-07-15",
+      "2026-08-01"
+    ],
+    "trades": 726893,
+    "distinct_prices": 773,
+    "distinct_quantities": 7667,
+    "derived_on": "2026-08-20",
+    "confident": true,
+    "caveats": []
+  },
+  "BTCUSDT": {
+    "symbol": "BTCUSDT",
+    "tick_size": "0.1",
+    "step_size": "0.001",
+    "windows": [
+      "2026-03-02",
+      "2026-07-15",
+      "2026-08-01"
+    ],
+    "trades": 11680353,
+    "distinct_prices": 65187,
+    "distinct_quantities": 5919,
+    "derived_on": "2026-08-20",
+    "confident": true,
+    "caveats": []
+  },
+  "ETHUSDT": {
+    "symbol": "ETHUSDT",
+    "tick_size": "0.01",
+    "step_size": "0.001",
+    "windows": [
+      "2026-03-02",
+      "2026-07-15",
+      "2026-08-01"
+    ],
+    "trades": 19517566,
+    "distinct_prices": 26835,
+    "distinct_quantities": 49412,
+    "derived_on": "2026-08-20",
+    "confident": true,
+    "caveats": []
+  }
+}

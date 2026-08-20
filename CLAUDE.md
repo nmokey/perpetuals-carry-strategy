@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0 complete (T1–T6). M1 in progress: T1 (trades) and T2 (funding) complete; T3, T4, T5 specced and ready.** Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`. ~97 offline + 3 network tests, CI green on Linux and macOS.
+**M0 complete (T1–T6). M1 in progress: T1 (trades), T2 (funding) and T5 (symbol metadata) complete; T3, T4 specced and ready.** Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`, `ingestion/derive_symbol_meta.py` + the committed `ingestion/symbol_meta.json`. ~141 offline + 4 network tests, CI green on Linux and macOS.
 
-Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages, and M1's `fetch_book.py`, `derive_symbol_meta.py` and `validate_data.py`.
+Tick and step sizes are **committed data, not computed at runtime** — read them from `symbol_meta.json` via `derive_symbol_meta.load_table()`. A value that silently changed between runs would make backtests irreproducible. Currently `0GUSDT`, `BTCUSDT`, `ETHUSDT`; the table grows when OD-3 picks the study symbols.
+
+Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages, and M1's `fetch_book.py` and `validate_data.py`.
 
 **Nothing needs to run continuously.** Every source is a static historical archive, so there is no recorder, no daemon, and no data that decays while a decision is pending.
 
