@@ -12,6 +12,8 @@ Tick and step sizes are **committed data, not computed at runtime** — read the
 
 Not yet written: `cpp/` holds a stub `version()` and nothing else — `OrderBook`, `BookReplayer`, `SPSCQueue` and the impact simulator are all M2–M4 — as are the `models/`, `strategy/` and `reporting/` packages.
 
+**The corpus on disk is partial and that is deliberate.** M1's *code* is complete; the bulk pull is not done. Currently `0GUSDT` June–July trades/funding plus 3 book days, and one `BTCUSDT` book day from the scale test. Before pulling the full 24 months, read the two `blockers.md` watch-list entries on archive lag and book sizing — the spec's size budget is ~2x under and the window's end date needs deciding.
+
 **Nothing needs to run continuously.** Every source is a static historical archive, so there is no recorder, no daemon, and no data that decays while a decision is pending.
 
 **Data sourcing is settled** (D-009, and `docs/external-dependencies-audit.md`): Binance USD-M throughout — trades/funding/klines from the `data.binance.vision` S3 archive, L2 order book from the Tardis.dev free tier (first day of each month). **No venue API is used or usable** — `fapi.binance.com` and Bybit are geo-blocked from this location. Don't write code that calls one.

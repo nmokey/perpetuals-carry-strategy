@@ -24,6 +24,47 @@ Milestone status at a glance:
 
 ## 2026-08-20
 
+### M1 pipeline exercised end to end; four findings, none of them code defects
+
+Ran the whole M1 ingestion path against real data at realistic scale, per M1-T3's Q1 ("pull 3
+months to exercise the pipeline before committing to the full 24"). The code needed no changes.
+Everything below is a fact about the data or the plan that the exercise surfaced.
+
+**The streaming design holds at the size it was built for.** `BTCUSDT` 2026-06-01
+`incremental_book_L2`: **161,057,093 rows in 323 bounded chunks**, 47,781 snapshot rows,
+17,311,007 removals, 13 resync events — 893 MB compressed in, 570 MB Parquet out. The matching
+`book_snapshot_25` melted to **115,452,150 rows in 231 chunks**. Nothing was held whole at any
+point. That 17.3M removals is also the strongest argument yet for preserving `amount = 0`: it is
+11% of the feed, not an edge case.
+
+**The spec's book size estimate is about half the truth.** M1-T3 Q1 budgets ~449 MB/day for BTC
+book; measured 893 MB for 2026-06-01, plus 84 MB for the reference. The 24-month plan is therefore
+**~23 GB for BTC book alone**, not the ~10.8 GB budgeted, before Parquet and before ETH. Logged to
+`blockers.md` — the bulk pull needs re-costing against actual free disk (currently ~13 GiB).
+
+**Tardis does not answer `HEAD`.** It returns 404 where `GET` returns 200. A `HEAD`-based sizing
+probe therefore reports every book dataset as absent and undercounts the total by its largest term
+— which is exactly what happened on the first attempt at estimating this pull. Nothing in the
+codebase uses `HEAD`, so no code was affected, but the trap is worth knowing before anyone sizes
+the 24-month pull.
+
+**Monthly archives lag the month, and `backfill` is month-granular.** `0GUSDT-trades-2026-08.zip`
+and the matching `fundingRate` both 404 on 2026-08-20 while daily `trades` files exist through
+2026-08-19. So the current month cannot enter the corpus at all through `backfill`, and the study
+window has to end at the last complete month unless a daily fallback is added.
+
+That is not cosmetic, and the validator proved it: the Tardis book **is** available for
+2026-08-01, so pulling everything available produced a corpus whose book data sits outside the
+trades window, and `book_within_trades_window` fired on it. Calibrating impact on a day the
+backtest has no execution data for is precisely what that check exists to stop. Decide the window
+question before the bulk pull, since it changes what "24 months" means.
+
+**Corpus as it stands** (deliberately partial — this was an exercise, not the bulk pull):
+`0GUSDT` 61 trade days and 61 funding days (June–July complete months) plus 3 book days; `BTCUSDT`
+1 book day. 2.0 GB on disk including the 1.2 GB download cache. `validate_data` reports 680 checks
+with 2 failures, both of them the known incoherences above rather than data defects — the August
+book day with no August trades, and BTC book with no BTC trades pulled.
+
 ### M1 complete — T4 data validation, and a broken invariant it exposed
 
 `ingestion/validate_data.py` plus the committed `ingestion/data_quality_allowlist.toml`. 43 tests;

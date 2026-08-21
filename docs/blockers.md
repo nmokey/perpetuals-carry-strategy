@@ -39,11 +39,41 @@ question, not a technical workaround.
 
 Not blocking yet; will bite at the milestone named.
 
-- **M2-T1 / M4-T2 dependency edges are tighter than necessary.** M2-T1 (a pure data structure)
-  is listed as depending on M1-T4 (full data QA), and M4-T2 on M3-T2 (the SPSC queue). Both can
-  be developed and unit-tested against synthetic fixtures first; the dependency is real only for
-  the validate-against-real-data half of each acceptance criterion. Don't let the doc's edge
-  serialize work that could proceed in parallel.
+- **Monthly archives are not published until the month closes, and `backfill` is month-granular.**
+  Verified 2026-08-20: `0GUSDT-trades-2026-08.zip` and `0GUSDT-fundingRate-2026-08.zip` both 404
+  while the daily `trades` files exist through 2026-08-19 (the daily archive lags ~1 day). So the
+  current month cannot enter the corpus through `fetch_trades.backfill` / `fetch_funding.backfill`
+  at all, and the study window must end at the **last complete month** unless a daily backfill path
+  is added.
+
+  This is not cosmetic: the Tardis book *is* available for the first of the current month, so
+  pulling "everything available" produces a corpus with book data outside the trades window —
+  exactly what `validate_data`'s `book_within_trades_window` check fired on during the M1 pipeline
+  exercise. Calibrating impact on a day the backtest has no execution data for is the failure that
+  check exists to prevent.
+
+  Options when this matters: end the window at the last complete month (simplest, loses up to a
+  month), or add a daily fallback to `backfill` for the trailing partial month. Decide before the
+  bulk pull, since it changes what "24 months" means.
+
+- **The book size estimate in M1-T3 Q1 is roughly half the truth.** The spec's arithmetic assumes
+  ~449 MB/day compressed for `BTCUSDT` `incremental_book_L2`. Measured 2026-08-20:
+  **893 MB** for 2026-06-01, plus 84 MB for the matching `book_snapshot_25`. The 24-month plan is
+  therefore ~23 GB for BTC book alone rather than the ~10.8 GB the spec budgets, before Parquet
+  output and before ETH.
+
+  Re-cost the bulk pull against actual free disk before committing to it. Note also that
+  **Tardis does not answer `HEAD`** — it returns 404 where `GET` returns 200 — so any sizing probe
+  must use a streamed `GET` and read `content-length`. A `HEAD`-based estimate silently reports the
+  book datasets as absent and undercounts the total by the largest term.
+
+- **M4-T2's dependency edge is tighter than necessary.** M4-T2 is listed as depending on M3-T2
+  (the SPSC queue), but it can be developed and unit-tested against synthetic fixtures first; the
+  dependency is real only for the validate-against-real-data half of the acceptance criterion.
+  Don't let the doc's edge serialize work that could proceed in parallel.
+
+  *M2-T1's edge (on M1-T4) is no longer a concern — M1-T4 completed 2026-08-20, so the dependency
+  is satisfied rather than merely bypassable.*
 
 - **M7-T4 is sequenced after M7-T3, but T3 needs it.** The backtest loop's P&L requires fee and
   funding settlement accounting. Expect to build a minimal settlement model inside T3 and refine

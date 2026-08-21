@@ -17,10 +17,14 @@ design decisions.
 
 ## Status
 
-**M0 complete; M1 in progress.** Working: partitioned Parquet storage, archive download helpers
-(streamed, checksum-verified, cached), and the historical **trades** and **funding rate**
-downloaders. Order book acquisition, symbol metadata and the data-validation pass are specced and
-next. The C++ core (order book reconstruction, impact simulation) begins at M2.
+**M0 and M1 complete.** The whole ingestion layer works: partitioned Parquet storage, archive
+download helpers (streamed, checksum-verified, cached), historical **trades**, **funding rate** and
+**L2 order book** downloaders, symbol tick/step derivation committed as a reviewed lookup table,
+and a corpus-level **data validation** pass usable as a gate. The C++ core (order book
+reconstruction, impact simulation) begins at M2 — `cpp/` is currently a deliberate stub.
+
+Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
+the M1 scripts.
 
 Data comes from static historical archives — `data.binance.vision` for trades, funding and klines,
 and the Tardis.dev free tier for L2 order book. No venue API is used: `fapi.binance.com` and Bybit
