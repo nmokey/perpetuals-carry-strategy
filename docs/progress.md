@@ -10,7 +10,7 @@ Milestone status at a glance:
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
-| M2 — Order book reconstruction (C++) | Not started |
+| M2 — Order book reconstruction (C++) | In progress — T1 complete (2026-08-22), T2/T3 specced |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
@@ -19,6 +19,110 @@ Milestone status at a glance:
 | M8 — Comparative study | Not started |
 | M9 — Analysis & writeup | Not started |
 | M10 — Perf benchmarking (stretch) | Not started |
+
+---
+
+## 2026-08-22
+
+### M2-T1 complete — `OrderBook`, 14 tests, 9 of 10 mutations caught
+
+`cpp/include/perpcarry/order_book.hpp` + `cpp/src/order_book.cpp`. Sorted `std::vector<Level>` per
+side, bids descending and asks ascending, `quantity == 0` erasing. First real code in `cpp/` beyond
+the `version()` stub.
+
+**The acceptance criterion — agreement with an independently-reconstructed reference — is a
+differential test against an in-test `std::map` book**, 100k seeded operations with *both sides
+compared in full after every single operation* (0.25 s). The two implementations are structurally
+different, which is the point: they fail differently.
+
+**Mutation results (C12), read as detections rather than failure counts:**
+
+| Mutation | Caught by |
+|---|---|
+| Bids ordered ascending | `a better price moves top of book…` (+4 others) |
+| Removals never erase | `quantity zero removes the level` |
+| Removing an absent level throws | `removing a level that is not in the book is a no-op` |
+| Existing price inserts a duplicate | `an update at an existing price replaces it in place` |
+| `is_crossed` uses `>` not `>=` | `a crossed book is reported, not repaired` |
+| Price validation removed | `invalid prices and quantities are rejected` |
+| Quantity validation removed | same |
+| `clear()` forgets the ask side | `clear empties both sides` |
+| `best()` returns the worst level | `a better price moves top of book…` |
+| **`reserve()` removed** | **nothing — survived, by design** |
+
+The survivor is honest and stays: `reserve()` changes when allocation happens, not what the book
+contains. Asserting on `capacity()` would pin an implementation detail. It is recorded in the
+spec's Q1 rather than quietly rounded away in a "9/9" claim — the count is 9 of 10.
+
+The differential test caught nothing during development, which is worth stating plainly: the
+implementation was right the first time, and the test's value is entirely in the mutation table
+above. A green differential run on its own would have been no evidence at all.
+
+**Two deviations from the spec as drafted**, both now recorded in it: `depth()` renamed
+`level_count()` (Q3 taken — M4-T3's "depth" is a quantity, and the collision would have crossed the
+pybind11 surface), and `BookUpdate` deferred to M2-T2 since nothing in T1 consumes it (C5).
+
+**One portability trap avoided.** The randomised stream uses `rng() % n`, not
+`std::uniform_int_distribution`: distributions are not portable across standard libraries and CI
+runs both libc++ and libstdc++, so a distribution-based stream would differ between the two legs
+and a CI failure would not reproduce locally. Probed and confirmed the same day that AppleClang 21
+has `std::span`, `std::optional` and floating-point `std::to_chars` — the last being what M2-T3's
+round-trip number formatting rests on, and the one libc++ historically lacked.
+
+**Verified this session:** `uv run cmake --build build/dev` + `ctest` → **15/15 passed**;
+`uv run ruff check .` and `ruff format --check .` clean; `uv sync --reinstall-package perpcarry`
+then `uv run pytest -q` → 254 passed, 6 deselected. Source restored to pristine after the mutation
+run and re-verified green.
+
+### M2 specs written; OD-5 resolved; the replay tolerance measured rather than assumed
+
+Wrote `specs/M2/{M2-T1,M2-T2,M2-T3}`. No code yet. Three things came out of the writing that were
+not known before it.
+
+**OD-5 confirmed as L2 (D-017), on a stronger reason than the design doc's.** §6 argued L2 as
+"standard practice"; the real constraint is that after OD-2 the only reachable book source is
+price-level aggregated at the source, so no order-level alternative existed to choose against.
+Consequence carried into M4 and the M9 caveats: queue position is unknowable, so the simulator can
+model marketable orders and cannot model a resting limit order's fill probability. Design-doc
+Status line updated.
+
+**M2-T2's "within documented tolerance" is a partition, not an epsilon.** Measured on `0GUSDT`
+2026-06-01 against the corpus already on disk:
+
+| Quantity | Value |
+|---|---|
+| Incremental rows / distinct ms | 1,299,113 / 414,207 (non-decreasing in file order) |
+| Reference images (exactly 50 rows each) | 277,590 |
+| Images whose ms holds no incremental row | **0** — and none with a gap of ±10 ms either |
+| Incremental rows sharing an image's ms | mean 3.83, median 2, p99 28, max 1,452 |
+| Images whose ms holds exactly one | **105,142 (37.9%)** |
+
+So there are no quiet points to compare at — the vendor emits an image on book change, so every
+image shares a millisecond with the diff that produced it. A design that waits for a gap would have
+had nothing to compare on the thinnest symbol in the corpus, and that would have been discovered at
+implementation time rather than now. The tolerance is therefore: **exact** equality (bitwise, 25
+levels per side) on the 105,142 images whose pairing is forced, and a reported mismatch rate on the
+rest, whose intra-ms ordering is unrecoverable because *our own* µs→ms truncation (D-013) removed
+it. Not an epsilon — an epsilon wide enough to absorb the ambiguous set would be wide enough to
+hide a real defect.
+
+**Book depth measured, and it settles the data structure.** Opening snapshot blocks hold 1,013 bid
+/ 1,002 ask levels for `BTCUSDT` and 403 / 1,000 for `0GUSDT` — the feed caps around 1,000 per
+side, so a side is ~16 KB and a sorted `std::vector` beats a node-based map for the linear walk M4
+performs on every simulated order. Also found: **BTC's opening snapshot block contains 13
+zero-quantity rows**, so a replayer that treats removal-of-an-absent-level as an error cannot ingest
+the first 2,015 rows of a real day. That is now test 5 of M2-T1 rather than a bug in week two.
+
+**The validation path needed a decision (D-018).** M2-T2's criterion assumes Python feeds the
+replayer (D-012), but the bindings are M3-T1, which *depends on* M2-T2 — and the Tardis licence
+means the comparison can never run in CI anyway. Resolved as a local-only harness: a Python CSV
+exporter plus a `perpcarry_replay_validate` C++ tool outside `perpcarry_core`, with only the
+aggregated JSON summary committed. Rejected pulling M3-T1 forward (inverts the doc's edge, violates
+C5). The C10 gap this leaves is logged on the blockers watch list rather than absorbed.
+
+**Verified this session, before writing any of it:** `uv run pytest -q` → 254 passed, 6 deselected;
+`uv run cmake --build build/dev` + `uv run ctest` → 1/1 passed; `import perpcarry_cpp` → `0.1.0`.
+So M2 starts from a green tree and a stub-only `cpp/`.
 
 ---
 

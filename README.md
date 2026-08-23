@@ -20,8 +20,10 @@ design decisions.
 **M0 and M1 complete.** The whole ingestion layer works: partitioned Parquet storage, archive
 download helpers (streamed, checksum-verified, cached), historical **trades**, **funding rate** and
 **L2 order book** downloaders, symbol tick/step derivation committed as a reviewed lookup table,
-and a corpus-level **data validation** pass usable as a gate. The C++ core (order book
-reconstruction, impact simulation) begins at M2 — `cpp/` is currently a deliberate stub.
+and a corpus-level **data validation** pass usable as a gate.
+
+**M2 is under way.** The C++ core's L2 `OrderBook` is complete and tested; snapshot/diff replay and
+the impact simulator follow in M2-T2 and M4.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.

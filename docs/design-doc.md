@@ -404,7 +404,10 @@ Status: OPEN, leaning frictionless-spot.
 *Affects: M2-T1.*
 Options: L2 (price-level aggregated) vs. L3 (order-level).
 Recommendation: L2 — matches realistically available data and is standard practice for signal research even at many trading firms.
-Status: Leaning resolved (L2); confirm before M2-T1.
+Status: **RESOLVED 2026-08-22 — L2** (see `decisions.md` D-017). The confirming reason is stronger
+than the recommendation above: after OD-2, the project's only book source is price-level aggregated
+at the source, so no order-level alternative was reachable. Queue position is therefore unknowable,
+which limits M4 to marketable orders and belongs in the M9 caveats.
 
 **OD-6 — Concurrency model**
 *Affects: M3-T2.*

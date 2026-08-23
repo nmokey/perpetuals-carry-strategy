@@ -10,6 +10,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(perpcarry_tests
+  test_order_book.cpp
   test_version.cpp
 )
 target_link_libraries(perpcarry_tests PRIVATE perpcarry_core Catch2::Catch2WithMain)

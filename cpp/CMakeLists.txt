@@ -1,6 +1,7 @@
 # Deterministic, single-threaded core. Everything correctness-critical lives here
 # (order book reconstruction, impact simulation) so it stays unit-testable.
 add_library(perpcarry_core STATIC
+  src/order_book.cpp
   src/version.cpp
 )
 target_include_directories(perpcarry_core PUBLIC

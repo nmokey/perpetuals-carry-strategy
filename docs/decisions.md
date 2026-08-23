@@ -18,7 +18,7 @@ When an OD is resolved, update both the table below *and* the Status line in the
 | OD-2 | Historical L2 book acquisition | **RESOLVED 2026-08-12** — Tardis free tier (option d) | M1-T3 → everything downstream |
 | OD-3 | Symbol selection | OPEN (deliberately deferred to M8) | M8-T2 |
 | OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
-| OD-5 | Book reconstruction fidelity | Leaning resolved: L2 | M2-T1 |
+| OD-5 | Book reconstruction fidelity | **RESOLVED 2026-08-22** — L2, see D-017 | M2-T1 |
 | OD-6 | Concurrency model | OPEN, strongly leaning (b) single-threaded core + SPSC queue | M3-T2 |
 | OD-7 | Impact model functional form | OPEN (recommendation: fit both, compare) | M5-T2 |
 | OD-8 | Bayesian inference method | OPEN, leaning closed-form conjugate | M6-T2 |
@@ -356,3 +356,66 @@ to measure it rather than assume it.
 TOML keeps the comments the file needs — its whole purpose is prose reasons reviewable in diffs —
 and matches the project's existing config language. The spec named YAML as a format, not as a
 requirement; nothing else depends on the choice.
+
+---
+
+## D-017 — OD-5 resolved: L2 price-level reconstruction (2026-08-22)
+
+**Context.** OD-5 sat at "leaning resolved (L2); confirm before M2-T1" since 2026-08-12. M2-T1's
+`Depends On` names it, so it had to be confirmed rather than assumed before the spec was written.
+
+**Decision.** L2 — price-level aggregated. Confirmed, not merely leaned.
+
+**Why the design doc's reasoning is weaker than the real one.** §6 argues L2 on grounds of "matches
+realistically available data and is standard practice". True, but the actual constraint is harder:
+after OD-2 the project's only book source is Tardis `incremental_book_L2`, which **is** price-level
+aggregated at the source. No order-level data exists in any dataset this project can reach, at any
+price tier that was evaluated. L2 was never a choice between two available fidelities, and the
+writeup should say so rather than presenting it as a considered trade-off it did not get to make.
+
+**Consequence, and it is a real limitation.** Queue position is unknowable from aggregated data.
+M4's simulator can therefore model *marketable* orders — walking the book and paying the spread —
+but cannot model a resting limit order's fill probability. That bounds the strategy in M7 to
+market-order execution, and it belongs in the M9 caveats alongside the partial-depth and
+frictionless-spot approximations, not as a footnote.
+
+**Consequence for the code.** `OrderBook` keys on price and stores one aggregate quantity per
+level. There is no order id anywhere in the core, and adding one later would not be additive — it
+would be a different data structure fed by a different feed.
+
+---
+
+## D-018 — M2 validates against vendor data through a local CSV harness, not through Python (2026-08-22)
+
+**Context.** M2-T2's acceptance criterion is "replayed state matches the vendor's
+`book_snapshot_25`". Two standing constraints make the obvious route unavailable:
+
+1. **D-012** — the C++ core reads no Parquet and does no file I/O; Python reads and feeds batches
+   across the pybind11 boundary. But the bindings are **M3-T1, which depends on M2-T2**. The data
+   path the criterion assumes does not exist at the moment the criterion is checked.
+2. **Tardis Clause 9.2(2)** — book rows may not be committed or reach CI. So this comparison can
+   never be a CI test, in the per-PR tier *or* the nightly one, whatever the mechanism.
+
+**Decision.** A local-only validation harness, outside `perpcarry_core`:
+
+- `python -m perpcarry.tools.export_book` exports one symbol-day from the Parquet corpus to two
+  CSVs (events in file order; long-form reference images), writing under `data/` by default.
+- `perpcarry_replay_validate`, a C++ tool target, reads those CSVs, replays, and compares.
+- Committed artifact is the **JSON summary** — counts and mismatch rates. Aggregated and
+  non-reconstructible, so licence-clean; the CSVs and the corpus stay out of git as always (C9).
+
+**Why not pull M3-T1 forward.** It inverts the doc's dependency edge and violates C5 — bindings
+built to serve a test, before the milestone that specifies them, is exactly the "half-finished M3
+living inside M2" that destroys per-milestone demonstrability. The harness is small, and when
+M3-T1 lands the same validation re-runs through Python (M3-T3's smoke test), at which point the
+harness is a debugging convenience rather than the only route.
+
+**Why CSV rather than teaching the core to read Parquet.** That is D-012, unchanged. The tool has
+file I/O; `perpcarry_core` still has none, and nothing links Arrow.
+
+**The C10 tension, stated rather than hidden.** C10 says a rigor claim CI does not run is a claim
+about the past, and this claim is exactly that: the real-data comparison is a dated local run. The
+licence leaves no version of it that CI may execute. What CI *can* enforce, and will: the harness
+builds, and runs end to end against a **synthetic** events+reference pair with a known injected
+defect. So the mechanism is continuously tested and only the input is manual. Logged to
+`blockers.md` so the gap is visible at M9 rather than rediscovered there.

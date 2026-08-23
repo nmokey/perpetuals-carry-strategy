@@ -85,6 +85,18 @@ Not blocking yet; will bite at the milestone named.
   address this — resample to a common cadence, model in continuous time, or restrict the window —
   rather than discovering it at fit time.
 
+- **M2-T2's real-data validation can never run in CI, in either tier.** The Tardis licence forbids
+  book data reaching CI (M1-T3 Licence section, Clause 9.2(2)), so the comparison against
+  `book_snapshot_25` — which is the *entire* correctness argument for the book, since §3.2 has no
+  `update_id` — is a dated local run whose committed artifact is an aggregated JSON summary. That
+  is a knowing exception to C10 ("a rigor claim CI does not run is a claim about the past"), and
+  the usual escape hatch of moving it to the nightly tier does not apply: nightly is still CI.
+
+  Mitigation, per D-018: CI runs the harness end to end against a **synthetic** events+reference
+  pair with an injected defect, so the mechanism is continuously tested and only the input is
+  manual. Re-run the real check whenever `OrderBook` or `BookReplayer` changes, and state the gap
+  in the M9 writeup rather than letting a reviewer find it.
+
 - **ThreadSanitizer is not yet wired into the build.** M3-T2's acceptance criterion requires a
   TSan-clean stress run; there is currently no sanitizer build configuration, and no nightly CI
   tier to run it in (design doc Section 4.9 specifies the tier; it is not built).
