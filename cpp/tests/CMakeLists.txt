@@ -36,6 +36,22 @@ endif()
 target_sources(perpcarry_tests PRIVATE test_replay_validate.cpp)
 target_link_libraries(perpcarry_tests PRIVATE perpcarry_replay_validate)
 
+# perpcarry_core is linked directly (test_order_book.cpp and friends use it) and arrives
+# again transitively through perpcarry_replay_validate, which PUBLIC-links it because its
+# own header exposes core types. Declaring direct dependencies directly is right, so the
+# duplicate is CMake flattening a correct graph rather than a mistake to restructure.
+#
+# Apple's linker warns about it anyway. Silence that one warning rather than dropping the
+# explicit dependency: relying on the transitive path would make the tests' link depend on
+# the tools being enabled, which is true today only because of the hard error above.
+if(APPLE)
+  include(CheckLinkerFlag)
+  check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" PERPCARRY_HAS_NO_WARN_DUPLICATE_LIBS)
+  if(PERPCARRY_HAS_NO_WARN_DUPLICATE_LIBS)
+    target_link_options(perpcarry_tests PRIVATE "-Wl,-no_warn_duplicate_libraries")
+  endif()
+endif()
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(perpcarry_tests)

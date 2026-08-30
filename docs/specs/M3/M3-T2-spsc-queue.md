@@ -2,7 +2,7 @@
 
 **Milestone:** M3
 **Status:** **Complete 2026-08-29.** `cpp/include/perpcarry/spsc_queue.hpp` (header-only),
-`cpp/tests/test_spsc_queue.cpp` (8 cases, 544 assertions), `cpp/tools/queue_bench.cpp`, a
+`cpp/tests/test_spsc_queue.cpp` (9 cases, 547 assertions), `cpp/tools/queue_bench.cpp`, a
 `PERPCARRY_SANITIZER` CMake option and a `sanitizer` CI job. Throughput recorded in
 `docs/validation/M3-T2-throughput.json`. Two deviations, both below: the benchmark reports a
 **distribution** rather than a single number, and the cache-line claim was measured rather than
@@ -56,6 +56,15 @@ make the queue "benchmark badly", which is folklore worth verifying. Interleaved
 runs (8 pairs, to control for machine drift): **padded 46.1–48.9M, unpadded 40.1–43.8M, no
 overlap.** So it is real and worth ~15% — considerably less than the tutorials imply, and an
 uninterleaved first attempt at this comparison was pure noise. Recorded at its true size.
+
+**A third-thread observer is a supported use, and it needed a fix.** `size_approx()` subtracts two
+independently-loaded atomics, and C++ does not order the operands of `-`. Read tail-first, an
+observer can sample tail, have head advance past it, and get an astronomically large `size_t` back
+rather than a small one. The consumer cannot expose this — it owns `head_`, which is why every other
+test here is blind to the difference — so the queue gained a dedicated observer test, and the
+fixed ordering (head first, in its own statement) is caught deterministically by it. Note the bound
+that test uses is *not* `<= capacity`: an observer sampling head early and tail late may legitimately
+see more than a queue-full, and only an underflow lands near `SIZE_MAX`.
 
 **And the TSan job was itself verified to catch something.** A sanitizer run that passes proves
 nothing until it is shown to fail on a real defect (C15). Weakening the queue's release/acquire pair

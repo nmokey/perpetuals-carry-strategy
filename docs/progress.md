@@ -22,6 +22,38 @@ Milestone status at a glance:
 
 ---
 
+## 2026-08-30 — closing the three gaps the pre-push audit left open
+
+**Linux/GCC is no longer inference.** The branch had only ever been built with clang on macOS, and
+three things met the other platform for the first time. Verified in containers (`gcc:14`), both
+architectures:
+
+| | arm64 | x86_64 |
+|---|---|---|
+| build warnings | 0 | 0 |
+| `ctest` | 59/59 | 59/59 |
+| `hardware_destructive_interference_size` | 256 | **64** |
+| TSan `[spsc]` | clean | — |
+
+The x86_64 value settles the M3-T2 claim on evidence rather than on one machine: 64 there, 256 on
+Apple Silicon, so hard-coding the tutorial's 64 really would under-pad by 4x on the development
+machine. The `-Winterference-size` pragma was also shown to be load-bearing — removing it makes
+GCC warn, with the note that the value "can vary between compiler versions or with different
+-mtune".
+
+**`size_approx()`'s ordering fix now has a test that fails without it.** The previous commit said
+plainly that it did not. A third observer thread reading the queue while producer and consumer run
+catches the tail-first version 3 runs out of 3. The bound is "no underflow", not `<= capacity` — an
+observer sampling head early and tail late may legitimately see more than a queue-full, and writing
+the tighter assertion would have made the test wrong rather than strict.
+
+**The macOS duplicate-library warning is gone**, and not by restructuring a correct dependency
+graph. `perpcarry_tests` genuinely depends on `perpcarry_core` directly and also receives it
+transitively through the validator; declaring direct dependencies directly is right, so the fix
+silences Apple's warning for that target rather than dropping the explicit edge and making the
+tests' link quietly depend on the tools being enabled.
+
+
 ## 2026-08-29 — M3-T3: end-to-end pipeline, completing M3
 
 `Pipeline` in `perpcarry_core` (ingest thread → SPSC queue → replay thread), bound to Python;

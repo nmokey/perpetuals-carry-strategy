@@ -234,6 +234,50 @@ TEST_CASE("ten million items cross two threads exactly once and in order", "[sps
   REQUIRE(producer_ok.load(std::memory_order_acquire));
 }
 
+TEST_CASE("size_approx never underflows, even read from a third thread", "[spsc]") {
+  // size_approx() subtracts two independently-loaded atomics. C++ does not order the
+  // operands of `-`, so a version that reads tail first can sample tail, have head advance
+  // past it, and return an astronomically large size_t instead of a small one.
+  //
+  // The consumer cannot expose this -- it owns head_, which is why the queue's other tests
+  // cannot see the difference. An independent observer can, so this is that observer.
+  //
+  // The bound is deliberately *not* `<= capacity`: an observer that samples head early and
+  // tail late may legitimately see more than a queue-full, because both indices moved
+  // between the two loads. Only an underflow lands anywhere near SIZE_MAX.
+  constexpr std::int64_t kItems = 2'000'000;
+  constexpr std::size_t kUnderflowBound = static_cast<std::size_t>(-1) / 2;
+
+  SPSCQueue<std::int64_t> queue(64);
+  std::atomic<bool> running{true};
+  std::atomic<bool> underflowed{false};
+  std::atomic<std::int64_t> observations{0};
+
+  std::thread observer([&] {
+    while (running.load(std::memory_order_acquire)) {
+      if (queue.size_approx() > kUnderflowBound) underflowed.store(true, std::memory_order_release);
+      observations.fetch_add(1, std::memory_order_relaxed);
+    }
+  });
+
+  std::thread producer([&] {
+    for (std::int64_t i = 0; i < kItems; ++i) {
+      while (!queue.try_push(i)) std::this_thread::yield();
+    }
+  });
+
+  std::int64_t value = 0;
+  for (std::int64_t i = 0; i < kItems; ++i) {
+    while (!queue.try_pop(value)) std::this_thread::yield();
+  }
+  producer.join();
+  running.store(false, std::memory_order_release);
+  observer.join();
+
+  REQUIRE(observations.load(std::memory_order_relaxed) > 0);  // the observer really ran
+  REQUIRE_FALSE(underflowed.load(std::memory_order_acquire));
+}
+
 TEST_CASE("the consumer's output does not depend on how the producer was paced", "[spsc]") {
   // D-020's constraint, as a test rather than a comment. The queue may change *when* an
   // item is consumed; it must never change which item or in what order. Reproducibility
