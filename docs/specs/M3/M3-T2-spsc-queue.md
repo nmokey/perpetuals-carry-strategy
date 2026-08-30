@@ -1,7 +1,12 @@
 # M3-T2 — Lock-free SPSC queue
 
 **Milestone:** M3
-**Status:** Draft
+**Status:** **Complete 2026-08-29.** `cpp/include/perpcarry/spsc_queue.hpp` (header-only),
+`cpp/tests/test_spsc_queue.cpp` (8 cases, 544 assertions), `cpp/tools/queue_bench.cpp`, a
+`PERPCARRY_SANITIZER` CMake option and a `sanitizer` CI job. Throughput recorded in
+`docs/validation/M3-T2-throughput.json`. Two deviations, both below: the benchmark reports a
+**distribution** rather than a single number, and the cache-line claim was measured rather than
+asserted.
 **Depends on:** M2-T2 (complete 2026-08-29); OD-6 (**resolved 2026-08-29** — option (b), D-020)
 **Design doc:** Section 4.1, Section 5 (M3), OD-6, Risk R4
 
@@ -37,6 +42,26 @@ Expanded into checkable tests:
 | 6 | Non-trivial `T` (a type with a non-default constructor and a destructor) is constructed and destroyed exactly once per item — no leak, no double-destroy | same |
 | 7 | **Determinism (D-020):** the consumer's output is byte-identical across runs with the same input, despite different interleavings between runs | same |
 | 8 | Throughput is recorded to `docs/validation/` as items/sec with hardware and build flags stated | `docs/validation/M3-T2-throughput.json` |
+
+**Two things measurement changed about this spec as drafted.**
+
+*A single throughput sample is not a measurement.* Consecutive uncontrolled runs on an idle
+machine ranged **35.6M to 46.1M items/sec** — a ~25% spread, wide enough that any one run could be
+quoted as "the" answer. The benchmark therefore repeats (7 runs) and reports median, min and max.
+It also records that in-process repeats read ~57M against ~46M for separate invocations: those runs
+are warm, and a cold first event is what the real pipeline sees.
+
+*The cache-line padding claim was checked, not inherited.* The draft asserted that unpadded indices
+make the queue "benchmark badly", which is folklore worth verifying. Interleaved padded/unpadded
+runs (8 pairs, to control for machine drift): **padded 46.1–48.9M, unpadded 40.1–43.8M, no
+overlap.** So it is real and worth ~15% — considerably less than the tutorials imply, and an
+uninterleaved first attempt at this comparison was pure noise. Recorded at its true size.
+
+**And the TSan job was itself verified to catch something.** A sanitizer run that passes proves
+nothing until it is shown to fail on a real defect (C15). Weakening the queue's release/acquire pair
+to `relaxed` produces `WARNING: ThreadSanitizer: data race` and a non-zero exit; the clean build
+exits zero. `TSAN_OPTIONS=halt_on_error=1` is set in CI so a reported race fails the job even when
+that run's assertions happen not to notice it.
 
 **Test 7 is the one that protects the research result, and it is the one most likely to be skipped.**
 D-020 permits the queue to change *when* an item is consumed and forbids it changing *which* or *in
@@ -128,16 +153,16 @@ as a property of the structure rather than as evidence the backtest is low-laten
 
 ## Open questions
 
-**Q1 — capacity, and what happens when the producer outruns the consumer?**
+**Q1 — capacity, and what happens when the producer outruns the consumer? Taken as recommended.**
 Recommendation: 65,536 slots, and the caller spins-then-yields on a failed push. The number matters
 less than that the policy is the caller's and is visible; make it a constructor argument so M3-T3 can
 show the queue actually filling rather than being permanently empty.
 
-**Q2 — `T` for the real pipeline: `BookUpdate`, or a replayed book snapshot?**
+**Q2 — `T` for the real pipeline: `BookUpdate`, or a replayed book snapshot? Taken: `BookUpdate`,** and the benchmark measures with it rather than with `int`, which would flatter the result by shrinking the copy.
 Recommendation: `BookUpdate`. It is trivially copyable and small, the producer already has it, and it
 keeps the queue's element a value rather than a reference into a book that the other thread mutates.
 Confirm at M3-T3, where the consumer's actual needs are visible.
 
-**Q3 — record throughput in `docs/validation/` or in `progress.md`?**
+**Q3 — record throughput in `docs/validation/` or in `progress.md`? Taken: both.**
 Recommendation: both, as M2-T2 did — a JSON artifact for the number, a dated line for the fact that
 it was measured. The JSON here carries no licence risk at all, unlike M2's.

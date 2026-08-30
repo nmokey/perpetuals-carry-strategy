@@ -88,3 +88,54 @@ jobs:
 
       - name: Test
         run: uv run ctest --test-dir build/ci --output-on-failure
+
+  # ThreadSanitizer over the SPSC queue (M3-T2). Until this job existed, that task's
+  # acceptance criterion -- "no data race under ThreadSanitizer" -- could not be executed at
+  # all, and a rigor claim CI does not run is a claim about the past (C10).
+  #
+  # Only the [spsc] tag, not the whole suite: TSan costs roughly an order of magnitude in
+  # runtime, and the queue is the only thing in this project with two threads. Verified
+  # 2026-08-29 that this catches a real defect -- weakening the queue's release/acquire pair
+  # to relaxed produces a reported race and a non-zero exit -- so it is a check, not a
+  # decoration.
+  sanitizer:
+    name: thread sanitizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Fail on any reported race, even one this run's assertions happen not to notice.
+      # Without this a race can be printed while the process still exits zero.
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync environment
+        run: uv sync --locked
+
+      - name: Cache Catch2 source
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FETCHCONTENT_DIR }}
+          key: fetchcontent-tsan-${{ runner.os }}-${{ hashFiles('cpp/tests/CMakeLists.txt') }}
+
+      # The extension module is off: it is not part of what TSan is here to check, and
+      # instrumenting it would cost build time for nothing. Tools stay on because
+      # cpp/tests/CMakeLists.txt requires them -- deliberately, so the suite cannot shrink
+      # silently.
+      - name: Configure
+        run: >
+          uv run cmake -S . -B build/tsan -G Ninja
+          -D PERPCARRY_SANITIZER=thread
+          -D PERPCARRY_BUILD_PYTHON=OFF
+          -D FETCHCONTENT_BASE_DIR="${{ env.FETCHCONTENT_DIR }}"
+
+      - name: Build
+        run: uv run cmake --build build/tsan
+
+      - name: Queue stress test under ThreadSanitizer
+        run: ./build/tsan/cpp/tests/perpcarry_tests "[spsc]"

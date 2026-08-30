@@ -111,20 +111,24 @@ Not blocking yet; will bite at the milestone named.
   manual. Re-run the real check whenever `OrderBook` or `BookReplayer` changes, and state the gap
   in the M9 writeup rather than letting a reviewer find it.
 
-- **ThreadSanitizer is not yet wired into the build.** M3-T2's acceptance criterion requires a
-  TSan-clean stress run; there is currently no sanitizer build configuration, and no nightly CI
-  tier to run it in (design doc Section 4.9 specifies the tier; it is not built).
-
-  **Owned as of 2026-08-29:** the M3-T2 spec puts this work inside that task rather than leaving it
-  to be inherited — a criterion that cannot be executed is not a criterion. The spec's resolution is
-  a `PERPCARRY_SANITIZER=thread` CMake option covering the queue stress test only, run in the
-  per-PR CI tier rather than waiting on the nightly tier that does not exist (C10: a rigor claim CI
-  does not run is a claim about the past). Note that `cpp/tests/CMakeLists.txt` hard-errors when
-  tests are on and tools are off, so the sanitizer configuration has to satisfy that.
 
 ---
 
 ## Resolved
+
+### B-008 — ThreadSanitizer was not wired into the build — **resolved 2026-08-29**
+
+Resolved by M3-T2. A `PERPCARRY_SANITIZER` CMake option applies `-fsanitize=<name>` globally
+(globally, because TSan must instrument the code a race is observed *from*, or it reports nothing
+and looks clean), and a `sanitizer` CI job builds with `PERPCARRY_SANITIZER=thread` and runs the
+`[spsc]`-tagged tests. Per-PR, not the nightly tier the design doc specifies and which still does
+not exist — a rigor claim CI does not run is a claim about the past (C10), and the run costs ~4s.
+
+**Verified to catch something, which is the part that matters.** Weakening the queue's
+release/acquire pair to `relaxed` produces `WARNING: ThreadSanitizer: data race` and a non-zero
+exit; clean exits zero. `TSAN_OPTIONS=halt_on_error=1` is set so a reported race fails the job even
+if that run's assertions do not happen to notice it.
+
 
 ### B-007 — symbol tick/step size had no obtainable source — **resolved 2026-08-20**
 

@@ -11,7 +11,7 @@ Milestone status at a glance:
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
-| M3 — Bindings & SPSC queue | In progress — T1 complete (2026-08-29); T2/T3 specced. OD-6 resolved |
+| M3 — Bindings & SPSC queue | In progress — T1, T2 complete (2026-08-29); T3 specced. OD-6 resolved |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
@@ -21,6 +21,39 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-29 — M3-T2: lock-free SPSC queue, and TSan wired into CI
+
+`cpp/include/perpcarry/spsc_queue.hpp` (header-only, bounded ring, power-of-two mask,
+placement-new into raw union storage so a non-trivial element is constructed and destroyed exactly
+once), 8 Catch2 cases / 544 assertions, a 10M-item two-thread stress run. 59 C++ tests (was 51),
+281 Python, ruff clean.
+
+**B-008 closed: ThreadSanitizer now runs in CI.** A `PERPCARRY_SANITIZER` CMake option plus a
+`sanitizer` job building `-fsanitize=thread` and running the `[spsc]` tag — per-PR, not the nightly
+tier the design doc specifies and which still does not exist, because the run costs ~4s and a rigor
+claim CI does not run is a claim about the past (C10). **Verified to catch something:** weakening
+the queue's release/acquire pair to `relaxed` produces a reported race and a non-zero exit, clean
+exits zero. `TSAN_OPTIONS=halt_on_error=1` so a race fails the job even when that run's assertions
+do not notice it.
+
+**Throughput: median 55.8M items/sec, range 43.0–59.7M** (`BookUpdate`, 40 bytes, capacity 65536,
+arm64, clang, RelWithDebInfo) — `docs/validation/M3-T2-throughput.json`.
+
+Two things measurement changed:
+
+1. **A single sample was not a measurement.** Consecutive uncontrolled runs ranged 35.6M–46.1M, a
+   ~25% spread wide enough that any one could be quoted as the answer. The tool now repeats 7 times
+   and reports median/min/max, and records that warm in-process repeats read ~57M against ~46M for
+   separate invocations — the real pipeline sees the cold case.
+2. **The cache-line padding claim was folklore until it was checked.** Interleaved padded/unpadded
+   runs, 8 pairs to control for machine drift: padded 46.1–48.9M, unpadded 40.1–43.8M, no overlap.
+   Real, and worth ~15% — much less than tutorials imply. An uninterleaved first attempt at the same
+   comparison was pure noise, which is the honest reason for interleaving.
+
+Also measured rather than assumed: `hardware_destructive_interference_size` is 256 here, so the 64
+every SPSC tutorial hard-codes would have under-padded by 4x on this architecture.
+
 
 ## 2026-08-29 — M3-T1: pybind11 bindings
 
