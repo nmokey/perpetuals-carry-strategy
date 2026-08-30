@@ -1,8 +1,12 @@
 # M3-T3 — End-to-end pipeline smoke test
 
 **Milestone:** M3
-**Status:** Draft
-**Depends on:** M3-T1, M3-T2 (both Draft as of 2026-08-29)
+**Status:** **Complete 2026-08-29.** `cpp/include/perpcarry/pipeline.hpp` + `cpp/src/pipeline.cpp`,
+bound as `Pipeline`; `python/perpcarry/tools/run_pipeline.py`; `tests/test_pipeline.py` (6 cases)
+and `tests/tools/test_run_pipeline.py` (5). Real run recorded in
+`docs/validation/M3-T3-0GUSDT-2026-06-01.json`. Two deviations, both below: `dump_csv` had to be
+bound to Python after all, and the pipeline lives in `perpcarry_core` rather than `tools/`.
+**Depends on:** M3-T1, M3-T2 (both complete 2026-08-29)
 **Design doc:** Section 4, Section 5 (M3)
 
 ## Goal
@@ -48,12 +52,45 @@ Expanded into checkable tests:
 | 6 | An exception raised on the producer thread surfaces to the caller rather than hanging the consumer or being swallowed | same |
 | 7 | **Real-data run**, local, not CI: `0GUSDT` 2026-06-01 reproduces the committed M2-T2 counts and its recorded digest | `docs/validation/M3-T3-0GUSDT-2026-06-01.json` |
 
+**Done 2026-08-29.** `0GUSDT` 2026-06-01: **1,299,113 events in ~3.5s**, exactly the count M2-T2
+recorded for the same day, so the checkpoint's first half matches. The queue saturated — peak
+occupancy 65,536 of 65,536, with 160,255 producer stalls — so the contention this task exists to
+exercise genuinely happened on real data, not only in the synthetic test.
+
+The digest `e35d9045…cc4b3c0e` was identical across three runs **and** across a queue capacity of 8
+versus 65,536, which changes the interleaving drastically (439,648 stalls against 160,255). That is
+D-020's determinism property demonstrated on a real day rather than argued.
+
+One independent cross-check worth recording: the final book is 400 bid / 998 ask levels, which is
+exactly what M2-T3's "close" ladder sample reported at 23:59:59.598 for the same day, by a different
+code path.
+
 **Test 5 is the C15 guard for this task.** The obvious failure is a pipeline where the consumer keeps
 up so easily that the queue is always empty — everything passes, and the concurrency was never
 exercised. Assert observed occupancy went above zero.
 
 **Test 3 is the one that would catch a real regression.** If threading changed the result at all, the
 number it changed would be a fill price, and nothing downstream could tell.
+
+**Two deviations from this spec as drafted.**
+
+*`dump_csv` is bound to Python after all*, reversing M2-T3's "and probably never". That call
+reasoned Python can read the corpus directly — true, and beside the point: this checkpoint is a
+digest of the **replayed** book, which only C++ holds. The alternative was re-deriving the canonical
+rendering in Python, where `repr(float)` and `std::to_chars` happen to agree today; a second source
+of truth that agrees by coincidence is exactly what C15 warns is invisible until it stops.
+
+*The threaded pipeline lives in `perpcarry_core`, not `tools/`.* It does no file I/O, so D-012 does
+not exclude it, and the bindings link only the core. It is the sole threaded component there, and
+the book core is still not concurrent: the `OrderBook` is owned entirely by the consumer thread and
+the producer never sees it.
+
+**Two tests added beyond the seven above:** a replay error injected 30,000 rows into a run with an
+8-slot queue — the case that deadlocks if the consumer forgets to tell the producer it has stopped,
+and a hang is a worse failure than an exception because it carries no message — and, on the Python
+side, a per-field assertion that every Arrow column lands in the right `BookUpdate` field. A
+transposed column mapping yields a run that completes, reports the right event count, and builds an
+entirely wrong book; no count check in this project would notice.
 
 ## The licence and disk constraints, which shape the split
 
@@ -103,16 +140,16 @@ pipeline validated" stand unqualified in the writeup.
 
 ## Open questions
 
-**Q1 — does the consumer need to be a real second thread, or would a coroutine do?**
+**Q1 — real second thread, or a coroutine? Taken: a real thread.**
 Recommendation: a real thread. The point of M3-T2 is a boundary between two threads; a single-threaded
 driver would test the queue's algebra and none of its memory ordering.
 
-**Q2 — commit the digest, or recompute both sides at run time?**
+**Q2 — commit the digest, or recompute at run time? Taken: commit it.**
 Recommendation: commit it. A digest recomputed from the same run proves nothing (C13's trap in a new
 costume); a committed one from a dated run turns a future divergence into a failure. It exposes
 nothing — that is the point of hashing it.
 
-**Q3 — should this task also assert against `book_snapshot_25` images, as M2-T2 does?**
+**Q3 — also assert against `book_snapshot_25` images? Taken: no.**
 Recommendation: no. That comparison is M2-T2's, it is done, and repeating it here would make this
 task's failures ambiguous between "the pipeline is wrong" and "the replay is wrong". Match the
 checkpoint; let M2-T2 own the vendor comparison.

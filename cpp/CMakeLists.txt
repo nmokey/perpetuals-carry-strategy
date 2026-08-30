@@ -1,16 +1,22 @@
 # Deterministic, single-threaded core. Everything correctness-critical lives here
 # (order book reconstruction, impact simulation) so it stays unit-testable.
+# std::thread needs -pthread on libstdc++/Linux; without it the SPSC queue's stress test
+# links on macOS and fails on the other CI platform. PUBLIC so tests and tools inherit it.
+find_package(Threads REQUIRED)
+
 add_library(perpcarry_core STATIC
   src/book_compare.cpp
   src/book_debug.cpp
   src/book_replayer.cpp
   src/order_book.cpp
+  src/pipeline.cpp
   src/version.cpp
 )
 target_include_directories(perpcarry_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 target_compile_features(perpcarry_core PUBLIC cxx_std_20)
+target_link_libraries(perpcarry_core PUBLIC Threads::Threads)
 set_target_properties(perpcarry_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(PERPCARRY_BUILD_PYTHON)

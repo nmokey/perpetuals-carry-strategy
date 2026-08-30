@@ -29,8 +29,11 @@ EXPECTED_SYMBOLS = {
     "BookReplayer",
     "BookUpdate",
     "OrderBook",
+    "Pipeline",
+    "PipelineResult",
     "ReplayStats",
     "Side",
+    "dump_csv",
     "version",
 }
 

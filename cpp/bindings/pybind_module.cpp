@@ -11,11 +11,18 @@
 // feed by looping OrderBook.apply from Python would be per-tick interop, and nothing here
 // makes that convenient.
 //
-// What deliberately does NOT cross, both per the spec:
-//   - the M2-T3 renderers (dump_csv, format_ladder, format_diff, format_price). The C++
-//     dump is what the C++ harness needs, and Python can read the corpus directly.
+// What deliberately does NOT cross:
+//   - format_ladder, format_diff, format_price. Human-readable renderings are for the C++
+//     harness's failure output; nothing on the Python side reads them.
 //   - compare_top_n / BookDiff. Comparison against vendor images is the harness's job
 //     (D-018), on the other side of a licence boundary Python code is not invited across.
+//
+// dump_csv DOES cross, reversing M2-T3's "and probably never". That call reasoned that
+// Python can read the corpus directly, which is true and beside the point: M3-T3's
+// checkpoint is a digest of the *replayed* book, a thing only C++ holds. Re-deriving the
+// canonical rendering in Python would be a second source of truth that agrees by luck --
+// Python's repr() and std::to_chars happen to produce the same text today, which is
+// exactly the kind of coincidence C15 warns is invisible until it breaks.
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -24,8 +31,12 @@
 #include <string>
 #include <vector>
 
+#include <sstream>
+
+#include "perpcarry/book_debug.hpp"
 #include "perpcarry/book_replayer.hpp"
 #include "perpcarry/order_book.hpp"
+#include "perpcarry/pipeline.hpp"
 #include "perpcarry/version.hpp"
 
 namespace py = pybind11;
@@ -35,6 +46,8 @@ using perpcarry::BookReplayError;
 using perpcarry::BookUpdate;
 using perpcarry::Level;
 using perpcarry::OrderBook;
+using perpcarry::Pipeline;
+using perpcarry::PipelineResult;
 using perpcarry::Side;
 
 namespace {
@@ -119,6 +132,43 @@ PYBIND11_MODULE(perpcarry_cpp, m) {
            py::arg("side"),
            "Levels on one side, best to worst, as (price, quantity) tuples. A copy: the "
            "result is unaffected by later updates to the book.");
+
+  m.def(
+      "dump_csv",
+      [](const OrderBook& book, std::size_t depth) {
+        std::ostringstream out;
+        perpcarry::dump_csv(book, out, depth);
+        return out.str();
+      },
+      py::arg("book"), py::arg("depth") = 25,
+      "side,level,price,quantity for the top `depth` levels per side, bids then asks. A "
+      "pure, deterministic, locale-independent function of book state -- which is what "
+      "makes a digest of it a stable checkpoint (M3-T3).");
+
+  py::class_<PipelineResult>(m, "PipelineResult")
+      .def_readonly("replay", &PipelineResult::replay)
+      .def_readonly("consumed", &PipelineResult::consumed)
+      .def_readonly("queue_capacity", &PipelineResult::queue_capacity)
+      .def_readonly("peak_queue_occupancy", &PipelineResult::peak_queue_occupancy)
+      .def_readonly("producer_stalls", &PipelineResult::producer_stalls)
+      .def_readonly("consumer_stalls", &PipelineResult::consumer_stalls);
+
+  py::class_<Pipeline>(m, "Pipeline")
+      .def(py::init<std::size_t>(), py::arg("queue_capacity") = Pipeline::kDefaultQueueCapacity)
+      // The GIL is released for the duration: run() spawns two C++ threads and touches no
+      // Python object, and holding the GIL across it would serialise the producer against
+      // the interpreter for no reason.
+      .def(
+          "run",
+          [](Pipeline& pipeline, const std::vector<BookUpdate>& batch) {
+            py::gil_scoped_release release;
+            return pipeline.run(std::span<const BookUpdate>(batch));
+          },
+          py::arg("batch"),
+          "Replay a batch across the ingest/replay thread boundary. One crossing per "
+          "batch, never per event (Risk R4).")
+      .def("book", &Pipeline::book, py::return_value_policy::reference_internal)
+      .def("stats", &Pipeline::stats, py::return_value_policy::reference_internal);
 
   py::class_<BookReplayer>(m, "BookReplayer")
       .def(py::init<>())

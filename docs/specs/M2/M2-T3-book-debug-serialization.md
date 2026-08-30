@@ -223,6 +223,10 @@ pins this on a book where the counts and the depth actually differ.
   run is read, and shell redirection covers the rest.
 - Rendering book state from Python — **M3-T1**, and probably never: the C++ dump is what the C++
   harness needs, and Python can already read the corpus directly.
+  **Revised 2026-08-29 (M3-T3):** `dump_csv` *is* bound to Python. The reasoning above holds for the
+  human-readable renderings — `format_ladder`, `format_diff` and `format_price` remain unbound — but
+  missed that M3-T3's checkpoint is a digest of the **replayed** book, which only C++ holds. Python
+  re-deriving that rendering would be a second source of truth agreeing by coincidence (C15).
 - Visualisation (depth charts, book heatmaps) — **M9** reporting, if it earns its place there.
 
 ## Open questions

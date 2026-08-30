@@ -1,0 +1,28 @@
+{
+  "task": "M3-T3",
+  "symbol": "0GUSDT",
+  "date": "2026-06-01",
+  "produced_by": "perpcarry.tools.run_pipeline, at the commit that introduces this file (see docs/specs/M3/M3-T3-pipeline-smoke-test.md); re-run to reproduce",
+  "queue_capacity": 65536,
+  "batch_size": 1000000,
+  "depth": 25,
+  "events": 1299113,
+  "seconds": 4.022,
+  "peak_queue_occupancy": 65536,
+  "producer_stalls": 160255,
+  "replay": {
+    "applied": 1299113,
+    "snapshot_rows": 19799,
+    "resyncs": 13,
+    "removals": 63764,
+    "crossed": 82356,
+    "last_timestamp": 1780358399598
+  },
+  "final_book": {
+    "bid_levels": 400,
+    "ask_levels": 998,
+    "top_25_sha256": "e35d904501dea321df325efcd4b9daae49ed37acd0d4ed41a1e3e301cc4b3c0e"
+  },
+  "checkpoint": "matches M2-T2",
+  "checkpoint_expected_events": 1299113
+}

@@ -11,7 +11,7 @@ Milestone status at a glance:
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
-| M3 — Bindings & SPSC queue | In progress — T1, T2 complete (2026-08-29); T3 specced. OD-6 resolved |
+| M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
@@ -21,6 +21,45 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-29 — M3-T3: end-to-end pipeline, completing M3
+
+`Pipeline` in `perpcarry_core` (ingest thread → SPSC queue → replay thread), bound to Python;
+`perpcarry.tools.run_pipeline` drives it from Parquet. 292 Python tests (was 281), 59 C++, ruff
+clean.
+
+**Real run: `0GUSDT` 2026-06-01, 1,299,113 events in ~3.5s — exactly the count M2-T2 recorded**, so
+the checkpoint's first half matches. The queue saturated: peak occupancy 65,536 of 65,536 with
+160,255 producer stalls, so the contention this task exists to exercise happened on real data and
+not only in the synthetic test. Recorded in `docs/validation/M3-T3-0GUSDT-2026-06-01.json`.
+
+**Determinism demonstrated rather than argued.** The digest `e35d9045…` was identical across three
+runs and across queue capacities of 8 versus 65,536 — an interleaving difference of 439,648 stalls
+against 160,255. That is D-020's constraint holding on a real day. An independent cross-check fell
+out of it: the final book is 400 bid / 998 ask levels, exactly what M2-T3's "close" ladder sample
+reported for the same timestamp by a different code path.
+
+**A latent CI break fixed before it fired.** Nothing linked `Threads::Threads`, so M3-T2's
+`std::thread` stress test linked on macOS and would have failed on Linux/libstdc++, which needs
+`-pthread`. Caught by looking rather than by CI.
+
+**Two definitions revised in the open:**
+
+1. `dump_csv` is now bound to Python, reversing M2-T3's "and probably never". That call reasoned
+   Python can read the corpus directly — true, and beside the point: the checkpoint is a digest of
+   the *replayed* book, which only C++ holds. Re-deriving the rendering in Python would agree today
+   (`repr(float)` and `std::to_chars` both emit shortest round-trip) and that coincidence is exactly
+   what C15 warns is invisible until it breaks. The human-readable renderings stay unbound.
+2. The threaded pipeline sits in `perpcarry_core`, not `tools/`: it does no file I/O, and the
+   bindings link only the core. It is the sole threaded thing there, and the book core is still not
+   concurrent — the `OrderBook` is owned entirely by the consumer thread.
+
+**Five mutations, five caught,** including two that matter more than they look: removing the
+consumer's abort signal *hangs* the pipeline (a producer blocked on a queue nobody drains — a worse
+failure than an exception, since a hang carries no message), and transposing the price and quantity
+columns in the Arrow conversion yields a run that completes, reports the right event count, and
+builds an entirely wrong book. No count check in this project would have noticed the second.
+
 
 ## 2026-08-29 — M3-T2: lock-free SPSC queue, and TSan wired into CI
 
