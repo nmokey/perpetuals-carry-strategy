@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0 complete (T1–T6). M1 complete (T1–T5).** **M2 in progress: T1 complete (2026-08-22), T2 and T3 specced.** All three M2 specs are in `docs/specs/M2/`; read M2-T2's tolerance section before touching the replayer — it is a measured partition of the comparison points, not an epsilon. Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` and `ingestion/tardis_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`, `ingestion/fetch_book.py`, `ingestion/derive_symbol_meta.py` + the committed `ingestion/symbol_meta.json`, `ingestion/validate_data.py` + `ingestion/data_quality_allowlist.toml`. 254 offline + 6 network Python tests and 15 C++ tests, CI green on Linux and macOS.
+**M0 complete (T1–T6). M1 complete (T1–T5).** **M2 in progress: T1 (2026-08-22) and T2 (2026-08-29) complete, T3 specced.** All three M2 specs are in `docs/specs/M2/`. The replay is validated against the vendor's own `book_snapshot_25` — 564,783 images across two symbols, zero mismatches (`docs/validation/`); read M2-T2's tolerance section and D-019 before changing the criterion, which is exact equality on every image rather than any epsilon. Working today: `storage.py` (partitioned Parquet), `ingestion/download.py` (streamed fetch, checksums, cache), `ingestion/binance_archive.py` and `ingestion/tardis_archive.py` (URL construction), `ingestion/fetch_trades.py`, `ingestion/fetch_funding.py`, `ingestion/fetch_book.py`, `ingestion/derive_symbol_meta.py` + the committed `ingestion/symbol_meta.json`, `ingestion/validate_data.py` + `ingestion/data_quality_allowlist.toml`. 264 offline + 6 network Python tests and 36 C++ tests, CI green on Linux and macOS.
 
 **Vendor book data is licence-restricted and the rules are stricter than C9.** Tardis Clause 9.2(2) forbids redistributing raw rows: never commit a book fixture, never let book data reach CI, never publish anything from which a book could be reconstructed. Fitted coefficients and capacity curves are fine. Every fixture in `tests/ingestion/test_fetch_book.py` is synthetic for this reason, and a test enforces it.
 
 Tick and step sizes are **committed data, not computed at runtime** — read them from `symbol_meta.json` via `derive_symbol_meta.load_table()`. A value that silently changed between runs would make backtests irreproducible. Currently `0GUSDT`, `BTCUSDT`, `ETHUSDT`; the table grows when OD-3 picks the study symbols.
 
-`cpp/` holds `OrderBook` (M2-T1, complete) plus the `version()` stub. Not yet written: `BookReplayer` (M2-T2), `SPSCQueue` (M3-T2) and the impact simulator (M4) — as are the `models/`, `strategy/` and `reporting/` packages.
+`cpp/` holds `OrderBook`, `BookReplayer` and `compare_top_n`, plus the `version()` stub; `cpp/tools/` holds the M2-T2 validation harness (D-018), which is deliberately outside `perpcarry_core` because it does file I/O and the core does none. Not yet written: the book dump/ladder (M2-T3), `SPSCQueue` (M3-T2) and the impact simulator (M4) — as are the `models/`, `strategy/` and `reporting/` packages.
 
 **`OrderBook` keys on `double` prices, and that is safe only because a price is never derived.** Levels are compared, never computed, so equality is exact for values parsed from the same decimal text. Any future code that does arithmetic on a *key* breaks that argument and needs integer ticks instead.
 
@@ -109,7 +109,7 @@ These are the project's actual research claims; code that violates them makes th
 
 Per OD-13/OD-14 and Sections 9/10 of the design doc:
 
-- `cpp/{include/perpcarry,src,bindings,tests}` — C++20, CMake, pybind11, Catch2. ThreadSanitizer is still to be wired up for the M3-T2 queue stress test.
+- `cpp/{include/perpcarry,src,bindings,tests,tools}` — C++20, CMake, pybind11, Catch2. `tools/` is where file I/O is allowed to live; `perpcarry_core` does none (D-012/D-018), and building the tests without the tools is a hard error rather than a quietly smaller suite. ThreadSanitizer is still to be wired up for the M3-T2 queue stress test.
 - `python/perpcarry/{ingestion,models,strategy,reporting}` — the wheel packages this directory; `tests/` at the repo root is the pytest suite mirroring it.
 - `data/` is gitignored; everything under it is re-derivable from the M1 ingestion scripts. `PERPCARRY_DATA_ROOT` overrides the location.
 - Bayesian inference on the critical path should be hand-rolled closed-form conjugate updating (Normal-Inverse-Gamma); PyMC/MCMC is an optional M9 addendum only (OD-8), which is why PyMC is not a dependency.

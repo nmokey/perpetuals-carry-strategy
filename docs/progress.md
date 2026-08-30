@@ -10,7 +10,7 @@ Milestone status at a glance:
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
-| M2 — Order book reconstruction (C++) | In progress — T1 complete (2026-08-22), T2/T3 specced |
+| M2 — Order book reconstruction (C++) | In progress — T1 (2026-08-22) and T2 (2026-08-29) complete; T3 specced |
 | M3 — Bindings & SPSC queue | Not started |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
@@ -19,6 +19,81 @@ Milestone status at a glance:
 | M8 — Comparative study | Not started |
 | M9 — Analysis & writeup | Not started |
 | M10 — Perf benchmarking (stretch) | Not started |
+
+---
+
+## 2026-08-29
+
+### M2-T2 complete — replay validated against the vendor's own book, on real data
+
+`BookReplayer` + `compare_top_n` in the core, plus the local harness D-018 called for:
+`python -m perpcarry.tools.export_book` writes two CSVs, `perpcarry_replay_validate` replays and
+compares. 16 Catch2 tests and 10 pytest tests; **12 of 12 mutations caught**. Suite is 36 C++ and
+264 Python tests.
+
+**Both real-data runs pass.** Summaries committed under `docs/validation/` — aggregated counts
+only, which is what the licence permits.
+
+| | `0GUSDT` | `BTCUSDT` |
+|---|---|---|
+| Coverage | full day, 1,299,113 events | first 20,000,361 events (~12%) |
+| Images compared | 277,590 | 287,193 |
+| Unambiguous | 105,142 | **0** |
+| Mismatches | 0 | 0 |
+| Resyncs | 13 | 1 |
+| Crossed observations | 82,356 (6.3%) | 2,011,452 (10.1%) |
+| Wall time | 2.3 s | 13.4 s |
+
+The `0GUSDT` resync count of 13 independently reproduces `fetch_book.ingest`'s figure for the same
+day from a separate implementation in another language, and the unambiguous count of 105,142
+reproduces the numpy analysis that set the spec. Two independent routes to the same numbers.
+
+**The criterion had to be revised, and the measurement is why (D-019).** The spec asserted only on
+*unambiguous* images — those whose millisecond holds exactly one event, where the pairing is forced.
+`BTCUSDT` has **zero** of those in 287,193 images: at ~1.9 events per millisecond, nothing is ever
+alone in its millisecond. So the criterion was vacuous on the one symbol M2–M4 actually replays.
+It now asserts on every image, which is *stricter* — it covers 459,641 images the old rule only
+counted — at the cost of one stated assumption about when the vendor emits an image, backed by
+564,783 observations with no counter-example.
+
+**A check that has never failed on real data is not known to work on real data (C12), so it was
+made to fail.** Deleting one top-of-book update from the real `0GUSDT` events produced 10
+mismatches, correctly categorised as quantity mismatches at the expected timestamps.
+
+**Two findings came out of that, both kept:**
+
+1. **Only the top 25 levels are validated at all.** The first injection attempt deleted an update
+   at `0.3997`, deep in a ~1000-level book — and the harness passed. No reference image describes
+   that depth. By level count the check constrains ~2.5% of the book, and M4 walks far deeper for
+   large orders. On the watch list, to be settled when M4-T1 is specced.
+2. **A dropped update self-heals.** Those 10 mismatches stopped once the next update at that price
+   arrived: L2 diffs carry absolute quantities, not deltas. Reassuring about the data, and a reason
+   any corruption window is narrower than it looks.
+
+**One defect found in my own tooling before it could be blamed on the book.** The first `BTCUSDT`
+run reported exactly one mismatch, at precisely the last exported timestamp. Cause: `--max-events`
+cut inside a 150-event millisecond, so the final image reflected updates the export had dropped.
+The exporter now rounds up to the millisecond boundary, and the case has its own test. Worth
+recording because the symptom — one mismatch in 287,193 — is exactly what a subtle replay bug
+looks like, and it was neither subtle nor in the replay.
+
+**The pre-push audit caught a third silent hole, in the build rather than the code.** Configuring
+with `-DPERPCARRY_BUILD_TOOLS=OFF` dropped all seven validator tests while `ctest` still printed
+"100% tests passed" — 29 where 36 were expected, with no outward difference. CI never sets that
+flag, so nothing was broken today; the hole was that a future edit could turn the entire M2-T2
+mechanism off and stay green. The combination is now a hard CMake error. Same shape as C15: a check
+that passes by not running.
+
+Two smaller audit findings, both fixed before the commit: `docs/grill-me.md` (a personal skill file)
+was swept in by `git add docs/`, and the summaries' `produced_at_git_sha` pointed at the commit
+*before* the one containing the code that produced them — the sha of the introducing commit cannot
+be known while producing it, so the field now describes its provenance instead of asserting a wrong
+one.
+
+**Verified this session:** `uv sync --locked`, `ruff check`, `ruff format --check`, `uv run pytest`
+→ 264 passed, 6 deselected; clean-dir `cmake` configure/build + `ctest` → 36/36; the tools-off
+configure fails with the intended message. Mutation sources restored to pristine and re-verified
+green.
 
 ---
 

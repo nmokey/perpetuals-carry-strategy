@@ -419,3 +419,49 @@ licence leaves no version of it that CI may execute. What CI *can* enforce, and 
 builds, and runs end to end against a **synthetic** events+reference pair with a known injected
 defect. So the mechanism is continuously tested and only the input is manual. Logged to
 `blockers.md` so the gap is visible at M9 rather than rediscovered there.
+
+---
+
+## D-019 — the replay criterion asserts on every image, not only unambiguous ones (2026-08-29)
+
+**Context.** M2-T2's spec partitioned the comparison points and asserted only on the
+*unambiguous* subset — images whose millisecond holds exactly one event, where the pairing
+between image and diff is forced and needs no assumption. That was derived a priori from
+`0GUSDT`, where 105,142 of 277,590 images (37.9%) qualify.
+
+**It does not survive contact with a liquid symbol.** Measured 2026-08-28 on `BTCUSDT`
+2026-06-01: **zero** of 287,193 images are unambiguous. At ~1.9 events per millisecond
+every image shares its millisecond with several events, so the criterion as written cannot
+be evaluated at all on the symbol M2–M4 actually replays. A criterion that is vacuous
+exactly where it matters most is not a criterion.
+
+**Decision.** Passing requires zero mismatches across **all** images. The unambiguous count
+is still computed and reported, because it is the part that is sound with no assumption at
+all; `Inconclusive` is now reserved for a run that compared nothing.
+
+**What this assumes, stated plainly.** That the vendor emits a `book_snapshot_25` image only
+after applying every update sharing that exchange millisecond. Evidence: **564,783 images
+across two symbols, zero counter-examples** — `0GUSDT` full day (277,590) and `BTCUSDT`'s
+first 20M events (287,193). Note that this includes 459,641 ambiguous images that the
+original criterion would not have looked at, all of which matched exactly.
+
+**Note the direction.** This makes the check *stricter*, not looser — it asserts on images
+it previously only counted. If the assumption is ever false, a run fails loudly and gets
+investigated. That is the safe way to be wrong, and it is the opposite of widening a
+tolerance until the data fits.
+
+**What did not change.** Equality is still exact, with no epsilon, on price and quantity
+alike. The original spec's reasoning for that stands and is untouched.
+
+**Two findings from the same run, both kept rather than smoothed over:**
+
+1. **Only the top 25 levels are validated at all.** A deliberately dropped update at
+   `0.3997` — deep in a ~1000-level book — was replayed wrongly and the harness passed,
+   because no reference image describes that depth. The same experiment against the
+   most-updated price (`0.4204`, top of book) produced 10 mismatches, correctly categorised.
+   So the check is real, and it constrains ~2.5% of the book by level count. M4 walks far
+   deeper than that for large orders. Logged to `blockers.md`.
+2. **A dropped update self-heals.** Those 10 mismatches stopped once the next update at
+   that price arrived: L2 diffs carry absolute quantities, not deltas, so a lost row
+   corrupts the book only until that level is next touched. Reassuring about the data's
+   robustness, and a reason the detection window is narrower than it looks.

@@ -1,6 +1,8 @@
 # Deterministic, single-threaded core. Everything correctness-critical lives here
 # (order book reconstruction, impact simulation) so it stays unit-testable.
 add_library(perpcarry_core STATIC
+  src/book_compare.cpp
+  src/book_replayer.cpp
   src/order_book.cpp
   src/version.cpp
 )
@@ -39,6 +41,10 @@ if(PERPCARRY_BUILD_PYTHON)
   else()
     message(STATUS "pybind11 not found; skipping the perpcarry_cpp extension module")
   endif()
+endif()
+
+if(PERPCARRY_BUILD_TOOLS)
+  add_subdirectory(tools)
 endif()
 
 if(PERPCARRY_BUILD_TESTS)

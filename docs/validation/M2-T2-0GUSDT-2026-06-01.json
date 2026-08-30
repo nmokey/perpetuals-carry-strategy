@@ -1,0 +1,31 @@
+{
+  "symbol": "0GUSDT",
+  "date": "2026-06-01",
+  "coverage": "full day",
+  "produced_by": "perpcarry_replay_validate, at the commit that introduces this file (see docs/specs/M2/M2-T2-book-replay.md); re-run to reproduce",
+  "depth": 25,
+  "verdict": "pass",
+  "passed": true,
+  "events": 1299113,
+  "reference_rows": 13879500,
+  "images": 277590,
+  "unambiguous_images": 105142,
+  "ambiguous_images": 172448,
+  "orphan_images": 0,
+  "unambiguous_mismatches": 0,
+  "ambiguous_mismatches": 0,
+  "price_mismatches": 0,
+  "quantity_mismatches": 0,
+  "missing_levels": 0,
+  "extra_levels": 0,
+  "replay": {
+    "applied": 1299113,
+    "snapshot_rows": 19799,
+    "resyncs": 13,
+    "removals": 63764,
+    "crossed": 82356,
+    "last_timestamp": 1780358399598
+  },
+  "sample_mismatch_timestamps": [],
+  "sample_ambiguous_timestamps": []
+}

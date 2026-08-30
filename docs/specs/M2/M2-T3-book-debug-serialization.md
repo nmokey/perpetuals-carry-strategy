@@ -2,7 +2,8 @@
 
 **Milestone:** M2
 **Status:** Draft
-**Depends on:** M2-T2 (comparison logic and the validation harness); C13 (rendering is the property)
+**Depends on:** M2-T2 (**complete 2026-08-29** — comparison logic and the validation harness); C13
+(rendering is the property)
 **Design doc:** Section 4.2, Section 5 (M2)
 
 ## Goal
@@ -48,6 +49,28 @@ Expanded into checkable tests:
 The book is constructed in the test, dumped, and compared to a literal string in the test. A stored
 golden would pass whether or not the formatting code still ran — the exact trap M1-T5's first
 formatting test fell into, where the artifact under test was already normalised.
+
+## What M2-T2 actually built, and what is left for this task
+
+The seam predicted below held, so this task starts from real interfaces rather than sketches:
+
+- `compare_top_n(book, reference_bids, reference_asks, depth)` returns a `BookDiff` — a
+  `std::vector<LevelDiff>`, each carrying `{side, rank, kind, replayed, reference}` with `kind` one
+  of `PriceMismatch`, `QuantityMismatch`, `MissingLevel`, `ExtraLevel`. **All four categories are
+  already produced and unit-tested.** This task renders that structure; it adds no comparison
+  semantics.
+- `perpcarry_replay_validate` already samples up to 5 mismatching timestamps (unambiguous and
+  ambiguous separately) and prints a **plain one-line-per-level diagnostic** through
+  `ValidationOptions::diagnostics`. That printer is an explicit stopgap: it names the level and both
+  values but shows no surrounding context, which is precisely what a ladder is for. **This task
+  replaces it** — the sampling and bounding logic stays where it is.
+- The harness compares at *every* image, not a sample. So the "3+ sample timestamps" criterion is
+  about producing inspectable output at a bounded number of points, never about coverage.
+
+One thing the T2 work changed for this task: with the criterion now asserting on every image
+(D-019), a failing run can report mismatches on *ambiguous* images too. The renderer should mark
+which kind a rendered mismatch is — an ambiguous one carries the extra caveat that its pairing was
+not forced, and a reader who does not know that will chase the wrong thing first.
 
 ## Design
 

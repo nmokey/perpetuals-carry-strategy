@@ -1,0 +1,31 @@
+{
+  "symbol": "BTCUSDT",
+  "date": "2026-06-01",
+  "coverage": "first 20,000,361 of 161,057,093 events (~12% of the day); a full-day CSV export is ~15 GB against 20 GB free",
+  "produced_by": "perpcarry_replay_validate, at the commit that introduces this file (see docs/specs/M2/M2-T2-book-replay.md); re-run to reproduce",
+  "depth": 25,
+  "verdict": "pass",
+  "passed": true,
+  "events": 20000361,
+  "reference_rows": 14359650,
+  "images": 287193,
+  "unambiguous_images": 0,
+  "ambiguous_images": 287193,
+  "orphan_images": 0,
+  "unambiguous_mismatches": 0,
+  "ambiguous_mismatches": 0,
+  "price_mismatches": 0,
+  "quantity_mismatches": 0,
+  "missing_levels": 0,
+  "extra_levels": 0,
+  "replay": {
+    "applied": 20000361,
+    "snapshot_rows": 4555,
+    "resyncs": 1,
+    "removals": 2106104,
+    "crossed": 2011452,
+    "last_timestamp": 1780283945428
+  },
+  "sample_mismatch_timestamps": [],
+  "sample_ambiguous_timestamps": []
+}

@@ -1,7 +1,12 @@
 # M2-T2 — Snapshot + diff replay logic
 
 **Milestone:** M2
-**Status:** Draft
+**Status:** **Complete 2026-08-29.** `book_replayer.{hpp,cpp}`, `book_compare.{hpp,cpp}`,
+`cpp/tools/replay_validate.*`, `python/perpcarry/tools/export_book.py`; 16 Catch2 tests + 10
+pytest tests, 12/12 mutations caught. Both real-data runs pass — summaries in
+`docs/validation/`. **The tolerance rule below was revised during the work (D-019):** the
+unambiguous subset is empty on `BTCUSDT`, so the criterion now asserts on every image. The
+original reasoning is kept as written, since the revision only makes sense against it.
 **Depends on:** M2-T1; D-012 (batch input, no C++ file I/O), D-013 (ms timestamps), D-014
 (long-form reference), D-018 (validation harness)
 **Design doc:** Section 3.2, Section 4.2, Section 5 (M2)
@@ -66,6 +71,19 @@ gets characterised and documented — not converted into a tolerance. An epsilon
 book comparison pass is the exact mechanism by which "calibrated from real data" quietly becomes
 "calibrated from data that nearly matches real data".
 
+> **Revised 2026-08-29 (D-019).** The paragraph above is wrong in one respect, and the measurement
+> that broke it is worth keeping visible. On `BTCUSDT` 2026-06-01 the unambiguous set is **empty**
+> — zero of 287,193 images, because at ~1.9 events per millisecond every image shares its
+> millisecond with several events. A criterion evaluable on `0GUSDT` and vacuous on the symbol
+> M2–M4 actually replays is not a criterion.
+>
+> **The rule is now: zero mismatches across all images**, with the unambiguous count still computed
+> and reported as the part that needs no assumption. This is *stricter* than what is written above
+> — it asserts on 459,641 images the original rule would only have counted — and it rests on one
+> stated assumption: that the vendor emits an image only after applying the whole millisecond
+> group. Evidence: 564,783 images across two symbols, zero counter-examples. Exact equality, with
+> no epsilon, is unchanged.
+
 ### Expanded into checkable tests
 
 CI-runnable, synthetic fixtures only (Tardis Clause 9.2(2), C9):
@@ -94,6 +112,32 @@ Local, real-data, **not in CI** (D-018):
 |---|---|---|
 | 16 | `0GUSDT` 2026-06-01: zero mismatches on the 105,142 unambiguous points | `perpcarry_replay_validate`; JSON summary committed |
 | 17 | `BTCUSDT` 2026-06-01 (161,057,093 events, 2,309,043 images): same, once, with runtime recorded | same |
+
+**Results, 2026-08-29** (`docs/validation/M2-T2-*.json`):
+
+| | `0GUSDT` | `BTCUSDT` |
+|---|---|---|
+| Coverage | full day, 1,299,113 events | first 20,000,361 events (~12%) |
+| Images compared | 277,590 | 287,193 |
+| Unambiguous | 105,142 | **0** |
+| Mismatches (unambiguous / ambiguous) | 0 / 0 | 0 / 0 |
+| Resyncs | 13 | 1 |
+| Crossed observations | 82,356 (6.3%) | 2,011,452 (10.1%) |
+| Wall time | 2.3 s | 13.4 s |
+
+The `0GUSDT` resync count of 13 independently reproduces `fetch_book.ingest`'s figure for the same
+day, from a separate implementation in a different language — the closest thing available to a
+second opinion on the sequencing rule.
+
+**Why `BTCUSDT` is a 12% prefix and not the full day.** A full-day CSV export is ~15 GB against
+20 GB free. `--max-events` takes a prefix, rounded up to a millisecond boundary — cutting mid-group
+leaves the final image describing a book strictly ahead of the replayed one, which produced exactly
+one guaranteed mismatch on the first attempt and looked precisely like a replay defect.
+
+**Test 16/17 were also run inverted**, because a check that has never failed on real data is not
+known to work on real data (C12). Deleting one top-of-book update from the real `0GUSDT` events
+produced 10 mismatches, correctly categorised, at the expected timestamps. Deleting one *deep*
+update produced none — see the limitation below.
 
 Test 12 is the one that would catch the defect a reviewer should most suspect: state carried
 incorrectly across batch boundaries. Batching is an artifact of D-012's boundary, and a replayer
@@ -199,10 +243,20 @@ holds only for one chunking is not determinism.
 image at *T* is built from rows up to *T* and nothing after. Test 14's "dropped diff" injection
 fails loudly rather than being smoothed by later rows, which is the property that matters.
 
-**Honest limitations.** Two get carried into M9 from here, both measured rather than estimated:
-the intra-millisecond ambiguity affecting 62.1% of images (a consequence of our own ms
-normalisation, not of the data), and D-018's C10 gap — the real-data check is a dated local run
-because the licence forbids CI ever seeing the input.
+**Honest limitations.** Three get carried into M9 from here, all measured rather than estimated:
+
+1. **Only the top 25 levels are validated.** A dropped update deep in the book replays wrongly and
+   this harness passes — demonstrated, not hypothesised. By level count the check constrains ~2.5%
+   of a 1000-level book, and M4 walks far deeper than that for large orders. On the watch list.
+2. **The ambiguous-image assertion rests on an assumption** (D-019) about when the vendor emits an
+   image. Well supported — 564,783 images, zero counter-examples — but an assumption, not a
+   guarantee, and it is the reason the unambiguous count is still reported separately.
+3. **D-018's C10 gap**: the real-data check is a dated local run, because the licence forbids CI
+   ever seeing the input.
+
+A fourth is worth noting but is *not* a limitation of this task: a dropped update self-heals at the
+next update to that price, because L2 diffs carry absolute quantities rather than deltas. That
+narrows the window in which any corruption is observable — including by this check.
 
 ## Out of scope
 

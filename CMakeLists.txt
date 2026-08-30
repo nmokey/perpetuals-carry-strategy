@@ -14,8 +14,12 @@ endif()
 # is driving the build to produce a wheel.
 option(PERPCARRY_BUILD_TESTS "Build the C++ unit tests" ON)
 option(PERPCARRY_BUILD_PYTHON "Build the pybind11 extension module" ON)
+# Local developer tools (the M2-T2 replay validator). Like the tests, these are for
+# standalone C++ work and have no place in a wheel.
+option(PERPCARRY_BUILD_TOOLS "Build the local developer tools" ON)
 if(SKBUILD)
   set(PERPCARRY_BUILD_TESTS OFF)
+  set(PERPCARRY_BUILD_TOOLS OFF)
 endif()
 
 if(PERPCARRY_BUILD_TESTS)

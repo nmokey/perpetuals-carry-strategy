@@ -85,6 +85,20 @@ Not blocking yet; will bite at the milestone named.
   address this — resample to a common cadence, model in continuous time, or restrict the window —
   rather than discovering it at fit time.
 
+- **The book is validated only 25 levels deep, and M4 walks deeper than that.** Demonstrated
+  2026-08-29: deleting one real update at `0.3997` — well below the top of a ~1000-level
+  `0GUSDT` book — left the replay wrong and the harness still passed, because no
+  `book_snapshot_25` image describes that depth. The same experiment at the most-updated price
+  (`0.4204`, top of book) produced 10 correctly-categorised mismatches, so the check itself
+  works; its *reach* is the issue. By level count it constrains ~2.5% of the book.
+
+  This bites at **M4-T1/T2**, whose whole purpose is walking deep into the book for large
+  orders — exactly the region no reference constrains. There is no deeper vendor reference on
+  the free tier, so the options are: accept it and caveat the large-order end of the capacity
+  curve in M9; or cross-check deep levels against a different invariant (monotone prices, no
+  duplicate levels, quantity sanity) which is weaker but not nothing. Decide when M4-T1 is
+  specced, not at write-up time.
+
 - **M2-T2's real-data validation can never run in CI, in either tier.** The Tardis licence forbids
   book data reaching CI (M1-T3 Licence section, Clause 9.2(2)), so the comparison against
   `book_snapshot_25` — which is the *entire* correctness argument for the book, since §3.2 has no
@@ -203,3 +217,9 @@ research itself; redistribution of raw data does not.
 **drops `update_id`**, which this feed does not carry. Dropped-update detection is therefore
 snapshot-comparison (M2-T2 against `book_snapshot_25`) rather than sequence-based — strictly
 weaker, and the design doc now says so rather than implying a guarantee it cannot make.
+
+**Outcome, 2026-08-29.** The substitute works, within a boundary now measured rather than guessed:
+564,783 images match exactly across two symbols, and injecting a dropped update at the top of book
+is caught within 10 images. Injecting one *below level 25* is not caught at all — the reference
+cannot see there. So "strictly weaker" turned out to mean "blind below the top 25", which is a
+sharper statement than the original entry could make, and it is the form that belongs in M9.

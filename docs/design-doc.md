@@ -135,6 +135,12 @@ sequence-based. Continuity is instead established by (a) each file opening with 
 block, and (b) validating replayed state against an independent `book_snapshot_25` for the same
 day (M2-T2). This is weaker than sequence checking and must be stated as such.
 
+**Executed 2026-08-29 (M2-T2).** 564,783 reference images — `0GUSDT` full day and a `BTCUSDT`
+prefix — match the replayed book exactly, no tolerance. That is strong evidence of continuity, but
+it does not repair the weakness: the reference describes only the top 25 of a ~1000-level book, so
+a dropped update below that depth is undetectable. Demonstrated by injecting one, which the
+harness passed. See `blockers.md`; it bites at M4.
+
 ### 3.3 Funding Rate
 
 Source: `data.binance.vision` monthly `fundingRate`, whose native columns are `calc_time,
@@ -521,6 +527,8 @@ perpcarry/
 │   │   └── impact_simulator.cpp
 │   ├── bindings/
 │   │   └── pybind_module.cpp
+│   ├── tools/                       # local dev tools; file I/O lives here, not in the core (D-018)
+│   │   └── replay_validate.cpp      # M2-T2 harness: replay vs book_snapshot_25
 │   ├── tests/
 │   │   └── test_order_book.cpp
 │   └── CMakeLists.txt
@@ -539,13 +547,16 @@ perpcarry/
 │       ├── strategy/
 │       │   ├── carry_strategy.py
 │       │   └── backtest.py
-│       └── reporting/
-│           └── plots.py
+│       ├── reporting/
+│       │   └── plots.py
+│       └── tools/
+│           └── export_book.py       # corpus -> CSV for the M2-T2 harness (D-018)
 ├── tests/                 # pytest suite mirroring python/
 ├── data/                  # gitignored, local Parquet storage
 ├── notebooks/             # exploratory analysis
 ├── docs/
-│   └── design-doc.md      # this document
+│   ├── design-doc.md      # this document
+│   └── validation/        # aggregated run summaries; no raw vendor rows (Tardis 9.2(2))
 ├── pyproject.toml
 └── README.md
 ```

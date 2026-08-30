@@ -22,8 +22,10 @@ download helpers (streamed, checksum-verified, cached), historical **trades**, *
 **L2 order book** downloaders, symbol tick/step derivation committed as a reviewed lookup table,
 and a corpus-level **data validation** pass usable as a gate.
 
-**M2 is under way.** The C++ core's L2 `OrderBook` is complete and tested; snapshot/diff replay and
-the impact simulator follow in M2-T2 and M4.
+**M2 is under way.** The C++ core reconstructs an L2 book from the vendor's snapshot-and-diff feed,
+and the replay is checked against the vendor's *independently constructed* top-25 snapshots:
+564,783 book images across two symbols, zero mismatches, exact equality with no tolerance. Debug
+serialization (M2-T3) is next; the impact simulator is M4.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.
