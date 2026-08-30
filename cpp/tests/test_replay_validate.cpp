@@ -9,9 +9,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <string>
 
+#include "perpcarry/book_debug.hpp"
 #include "perpcarry/book_replayer.hpp"
 #include "replay_validate.hpp"
 
@@ -163,7 +165,11 @@ TEST_CASE("a run that compares nothing is inconclusive, not a pass", "[validate]
   REQUIRE(summary.events == 9);
 }
 
-TEST_CASE("the diagnostics stream names the level that differs", "[validate]") {
+// M2-T3 replaced the one-line-per-level stopgap this test was written against with a
+// ladder. Migrated rather than deleted: it is the only check that the diagnostics stream is
+// wired up at all, and a renderer nothing calls is worth exactly as much as no renderer.
+TEST_CASE("the diagnostics stream renders a ladder around the level that differs",
+          "[validate]") {
   const std::string reference =
       with_replacement(kReference, "1002,\"bid\",0,100.0,4.0", "1002,\"bid\",0,100.0,4.5");
   std::istringstream events(kEvents);
@@ -177,8 +183,167 @@ TEST_CASE("the diagnostics stream names the level that differs", "[validate]") {
   REQUIRE_FALSE(summary.passed());
   const std::string text = diagnostics.str();
   REQUIRE(text.find("mismatch at 1002") != std::string::npos);
-  REQUIRE(text.find("bid rank 0") != std::string::npos);
-  REQUIRE(text.find("quantity") != std::string::npos);
+  REQUIRE(text.find("! quantity") != std::string::npos);
+  REQUIRE(text.find("replayed_price") != std::string::npos);
+
+  // The point of the ladder over the stopgap: the level that differs arrives with the
+  // levels around it, which are usually what explains it. Rank 1 matched and is still here.
+  REQUIRE(text.find("99.0") != std::string::npos);
+  REQUIRE(text.find("--- spread ") != std::string::npos);
+}
+
+// M2-T3, the "3+ sample timestamps" half of the criterion. Timestamps span a real UTC day
+// because the sampling rule is wall-clock: open, midday, close. A fixture spanning four
+// milliseconds would never reach the midday target and would silently test only two of the
+// three cases.
+const std::int64_t kDayStart = 1780272000000;  // 2026-06-01T00:00:00Z
+
+// The day's first image lands a little after midnight, never exactly on it -- which is what
+// a real export looks like, and what makes the wall-clock rule observable. Anchored to the
+// UTC day, the midday target is 12:00:00.000 whatever time the feed opened; anchored to the
+// first image instead, it would drift by that offset and the midday image would be missed.
+// A fixture opening at exactly 00:00:00.000 cannot tell those two rules apart.
+const std::int64_t kOpen = kDayStart + 137;
+const std::int64_t kMidday = kDayStart + 43200000;
+const std::int64_t kEvening = kDayStart + 72000000;
+
+std::string day_events() {
+  return "\"timestamp\",\"local_timestamp\",\"is_snapshot\",\"side\",\"price\",\"quantity\"\n" +
+         std::to_string(kOpen) + ",1,true,\"bid\",100.0,5.0\n" + std::to_string(kOpen) +
+         ",1,true,\"ask\",101.0,7.0\n" + std::to_string(kMidday) + ",2,false,\"bid\",100.0,6.0\n" +
+         std::to_string(kEvening) + ",3,false,\"ask\",101.0,8.0\n";
+}
+
+std::string day_reference(double midday_bid_quantity = 6.0) {
+  return "\"timestamp\",\"side\",\"level\",\"price\",\"quantity\"\n" + std::to_string(kOpen) +
+         ",\"ask\",0,101.0,7.0\n" + std::to_string(kOpen) + ",\"bid\",0,100.0,5.0\n" +
+         std::to_string(kMidday) + ",\"ask\",0,101.0,7.0\n" + std::to_string(kMidday) +
+         ",\"bid\",0,100.0," + perpcarry::format_price(midday_bid_quantity) + "\n" +
+         std::to_string(kEvening) + ",\"ask\",0,101.0,8.0\n" + std::to_string(kEvening) +
+         ",\"bid\",0,100.0,6.0\n";
+}
+
+TEST_CASE("a clean run renders three sampled timestamps", "[validate]") {
+  std::istringstream events(day_events());
+  std::istringstream reference(day_reference());
+  std::ostringstream diagnostics;
+
+  ValidationOptions options;
+  options.diagnostics = &diagnostics;
+  const ValidationSummary summary = validate(events, reference, options);
+
+  REQUIRE(summary.passed());
+  REQUIRE(summary.sample_clean_timestamps.size() == 3);
+  REQUIRE(summary.sample_clean_timestamps[0] == kOpen);
+  REQUIRE(summary.sample_clean_timestamps[1] == kMidday);
+  REQUIRE(summary.sample_clean_timestamps[2] == kEvening);
+
+  // And they are rendered, not merely counted: a pass that printed nothing looks the same
+  // as a pass that compared nothing (C15).
+  const std::string text = diagnostics.str();
+  REQUIRE(text.find("sample open at " + std::to_string(kOpen)) != std::string::npos);
+  REQUIRE(text.find("sample midday at " + std::to_string(kMidday)) != std::string::npos);
+  REQUIRE(text.find("sample close at " + std::to_string(kEvening)) != std::string::npos);
+  REQUIRE(text.find("book: top 25 of 1 bid / 1 ask") != std::string::npos);
+}
+
+TEST_CASE("a defect at a known timestamp is rendered as a ladder at that timestamp",
+          "[validate]") {
+  std::istringstream events(day_events());
+  std::istringstream reference(day_reference(6.5));  // the midday image disagrees
+  std::ostringstream diagnostics;
+
+  ValidationOptions options;
+  options.diagnostics = &diagnostics;
+  const ValidationSummary summary = validate(events, reference, options);
+
+  REQUIRE_FALSE(summary.passed());
+  REQUIRE(summary.images == 3);  // three timestamps were compared, only one differs
+  REQUIRE(summary.sample_mismatch_timestamps.size() == 1);
+  REQUIRE(summary.sample_mismatch_timestamps[0] == kMidday);
+
+  const std::string text = diagnostics.str();
+  REQUIRE(text.find("mismatch at " + std::to_string(kMidday)) != std::string::npos);
+  REQUIRE(text.find("! quantity") != std::string::npos);
+  REQUIRE(text.find("6.5") != std::string::npos);
+
+  // A failing run must not bury its ladders under the clean-run samples -- and must not
+  // report samples it never printed. The summary is what a later reader trusts about a run
+  // they did not watch, so a timestamp in it has to have output behind it.
+  REQUIRE(text.find("sample open at ") == std::string::npos);
+  REQUIRE(summary.sample_clean_timestamps.empty());
+}
+
+// write_json had no test at all before M2-T3 touched it, which is how a stray comma ships:
+// the harness's own output is the one artifact of a real run that may be committed (D-018),
+// and nothing was checking it was even parseable.
+TEST_CASE("the JSON summary is well formed and carries the sampled timestamps", "[validate]") {
+  std::istringstream events(day_events());
+  std::istringstream reference(day_reference());
+  std::ostringstream diagnostics;
+
+  ValidationOptions options;
+  options.diagnostics = &diagnostics;
+  const ValidationSummary summary = validate(events, reference, options);
+
+  std::ostringstream json;
+  perpcarry::tools::write_json(summary, json);
+  const std::string text = json.str();
+
+  REQUIRE(text.find("\"sample_clean_timestamps\": [" + std::to_string(kOpen) + ", ") !=
+          std::string::npos);
+  REQUIRE(text.find("\"verdict\": \"pass\"") != std::string::npos);
+
+  // Structural check, since there is no JSON parser here: every brace and bracket closes,
+  // and no separator is left dangling before one -- the exact defect an added field invites.
+  int depth = 0;
+  char previous = '\0';
+  for (const char c : text) {
+    if (c == '{' || c == '[') ++depth;
+    if (c == '}' || c == ']') {
+      --depth;
+      REQUIRE(previous != ',');
+    }
+    REQUIRE(depth >= 0);
+    if (!std::isspace(static_cast<unsigned char>(c))) previous = c;
+  }
+  REQUIRE(depth == 0);
+}
+
+TEST_CASE("only an ambiguous mismatch carries the ambiguity caveat", "[validate]") {
+  SECTION("ambiguous -- two events share the image's millisecond") {
+    const std::string reference =
+        with_replacement(kReference, "1003,\"bid\",2,98.0,3.0", "1003,\"bid\",2,98.0,3.5");
+    std::istringstream events(kEvents);
+    std::istringstream reference_stream(reference);
+    std::ostringstream diagnostics;
+
+    ValidationOptions options;
+    options.diagnostics = &diagnostics;
+    const ValidationSummary summary = validate(events, reference_stream, options);
+
+    REQUIRE(summary.ambiguous_mismatches == 1);
+    const std::string text = diagnostics.str();
+    REQUIRE(text.find("ambiguous mismatch at 1003") != std::string::npos);
+    REQUIRE(text.find("AMBIGUOUS PAIRING") != std::string::npos);
+  }
+
+  SECTION("unambiguous -- the pairing was forced, so no caveat") {
+    const std::string reference =
+        with_replacement(kReference, "1002,\"bid\",0,100.0,4.0", "1002,\"bid\",0,100.0,4.5");
+    std::istringstream events(kEvents);
+    std::istringstream reference_stream(reference);
+    std::ostringstream diagnostics;
+
+    ValidationOptions options;
+    options.diagnostics = &diagnostics;
+    const ValidationSummary summary = validate(events, reference_stream, options);
+
+    REQUIRE(summary.unambiguous_mismatches == 1);
+    const std::string text = diagnostics.str();
+    REQUIRE(text.find("pairing forced") != std::string::npos);
+    REQUIRE(text.find("AMBIGUOUS PAIRING") == std::string::npos);
+  }
 }
 
 TEST_CASE("a malformed export is rejected rather than misread", "[validate]") {

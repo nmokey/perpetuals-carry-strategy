@@ -9,11 +9,9 @@ void compare_side(const OrderBook& book, Side side, std::span<const Level> refer
                   std::size_t depth, std::vector<LevelDiff>& out) {
   const std::span<const Level> replayed = book.levels(side);
 
-  // Ranks the comparison can speak about at all: past `depth` the reference says nothing,
-  // and our ~1000-level book against a 25-level image is the expected shape rather than a
-  // defect. Within that window, a rank the reference omits is one it asserts does not
-  // exist (D-014 drops trailing levels only when the book really was thinner).
-  const std::size_t limit = std::min(depth, std::max(replayed.size(), reference.size()));
+  // Within this window, a rank the reference omits is one it asserts does not exist
+  // (D-014 drops trailing levels only when the book really was thinner).
+  const std::size_t limit = compared_rank_count(replayed.size(), reference.size(), depth);
 
   for (std::size_t rank = 0; rank < limit; ++rank) {
     const bool has_replayed = rank < replayed.size();
@@ -36,6 +34,11 @@ void compare_side(const OrderBook& book, Side side, std::span<const Level> refer
 }
 
 }  // namespace
+
+std::size_t compared_rank_count(std::size_t replayed_levels, std::size_t reference_levels,
+                                std::size_t depth) {
+  return std::min(depth, std::max(replayed_levels, reference_levels));
+}
 
 BookDiff compare_top_n(const OrderBook& book, std::span<const Level> reference_bids,
                        std::span<const Level> reference_asks, std::size_t depth) {

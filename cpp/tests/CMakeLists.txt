@@ -10,6 +10,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(perpcarry_tests
+  test_book_dump.cpp
   test_book_replayer.cpp
   test_order_book.cpp
   test_version.cpp

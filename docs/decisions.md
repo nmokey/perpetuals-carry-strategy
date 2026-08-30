@@ -19,7 +19,7 @@ When an OD is resolved, update both the table below *and* the Status line in the
 | OD-3 | Symbol selection | OPEN (deliberately deferred to M8) | M8-T2 |
 | OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
 | OD-5 | Book reconstruction fidelity | **RESOLVED 2026-08-22** — L2, see D-017 | M2-T1 |
-| OD-6 | Concurrency model | OPEN, strongly leaning (b) single-threaded core + SPSC queue | M3-T2 |
+| OD-6 | Concurrency model | **RESOLVED 2026-08-29** — (b) single-threaded core + SPSC queue, see D-020 | M3-T2 |
 | OD-7 | Impact model functional form | OPEN (recommendation: fit both, compare) | M5-T2 |
 | OD-8 | Bayesian inference method | OPEN, leaning closed-form conjugate | M6-T2 |
 | OD-9 | Entry/exit threshold policy | OPEN, leaning credible-interval | M7-T1 |
@@ -465,3 +465,45 @@ alike. The original spec's reasoning for that stands and is untouched.
    that price arrived: L2 diffs carry absolute quantities, not deltas, so a lost row
    corrupts the book only until that level is next touched. Reassuring about the data's
    robustness, and a reason the detection window is narrower than it looks.
+
+---
+
+## D-020 — OD-6 resolved: single-threaded core plus an SPSC queue (2026-08-29)
+
+**Context.** OD-6 sat at "OPEN, strongly leaning (b)" since 2026-08-12. M3-T2's `Depends On` names
+it, so writing the spec required confirming it rather than inheriting the lean.
+
+**Decision.** Option (b). A deterministic single-threaded book core, with a lock-free
+`SPSCQueue<T>` decoupling the ingestion/replay thread from the simulation thread.
+
+**Option (c) is not merely unearned — it cannot be evaluated honestly here.** The design doc rejects
+a fully concurrent book on the grounds that the complexity "isn't earned". The sharper reason is
+that a backtest replays *one totally ordered event stream*: there are no concurrent writers, so
+per-price-level locking would be protecting the book against contention its input is incapable of
+producing. Any throughput number measured for it would describe a workload this project never runs.
+That is worse than unnecessary — it is a benchmark that invites a false claim.
+
+**Option (a) was the real competitor, and it loses on one specific ground.** Fully single-threaded
+is correct, simpler, and costs nothing the research results care about. What it gives up is the one
+place the project has a genuine systems boundary to model. (b) is chosen because the
+feed-handler → strategy-engine split is a real structure in real systems, not because concurrency
+makes the backtest faster.
+
+**What this must not do to determinism, stated as a constraint rather than a hope.** Reproducibility
+given a fixed seed is a north-star invariant, and putting a queue between replay and simulation is
+exactly the kind of change that quietly breaks it. The queue is permitted to change *when* an item
+is consumed; it must never change *which* items are consumed or *in what order*. SPSC FIFO preserves
+order exactly, so the constraint lands entirely on the consumer: **no simulation behaviour may
+depend on queue occupancy, on how many items are available in a batch, or on producer timing.** A
+consumer that, say, sized an order by how far behind it had fallen would produce results that differ
+between runs on the same input. M3-T2's spec makes this a test, not a comment.
+
+**Honest framing for M9, decided now rather than at writeup.** In a backtest the producer is reading
+a file, so the queue is not on a latency-critical path in any live sense. The defensible claim is
+that the *structure* mirrors a real boundary and that its throughput is measured; the indefensible
+one is that it makes the backtest low-latency. The writeup says the former.
+
+**Consequence for the code.** Unchanged for the core: `OrderBook`, `BookReplayer` and the M2-T3
+renderers stay single-threaded and lock-free by virtue of being untouched by threads. The queue is
+new surface, not a modification of existing surface — which is why this decision costs nothing to
+have deferred until now.

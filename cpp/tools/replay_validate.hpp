@@ -58,6 +58,12 @@ struct ValidationSummary {
   std::vector<std::int64_t> sample_mismatch_timestamps;
   std::vector<std::int64_t> sample_ambiguous_timestamps;
 
+  // Timestamps whose book state was rendered on a *clean* run (M2-T3). A passing run that
+  // printed nothing is indistinguishable from a run that passed by comparing nothing, so
+  // the criterion's "3+ sample timestamps" is evidenced here rather than assumed: this
+  // count is what a reader checks against `images` (C15).
+  std::vector<std::int64_t> sample_clean_timestamps;
+
   enum class Verdict { Pass, Fail, Inconclusive };
 
   // Passing requires every image to match, ambiguous ones included (D-019).
@@ -88,8 +94,15 @@ struct ValidationSummary {
 struct ValidationOptions {
   std::size_t depth = 25;               // the reference is book_snapshot_25
   std::size_t max_sample_mismatches = 5;
-  // When set, the first mismatching image also gets its diff rendered here (M2-T3 will
-  // replace this with a ladder; T2 only needs the verdict).
+
+  // Where human-readable output goes, when set. On a failing run: a side-by-side ladder
+  // (M2-T3's format_diff) for each of the first `max_sample_mismatches` mismatching
+  // timestamps per category, then counts only -- a systematic defect would otherwise print
+  // a ladder per image and bury the first one, which is the informative one. On a clean
+  // run: the book at up to three sampled timestamps, so a pass still shows its work.
+  //
+  // This is raw per-level book data. It may be read, and must not be committed or let into
+  // CI from a real run (Tardis Clause 9.2(2)); the JSON summary is the publishable output.
   std::ostream* diagnostics = nullptr;
 };
 

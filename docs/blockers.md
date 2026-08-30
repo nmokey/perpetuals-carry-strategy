@@ -115,6 +115,13 @@ Not blocking yet; will bite at the milestone named.
   TSan-clean stress run; there is currently no sanitizer build configuration, and no nightly CI
   tier to run it in (design doc Section 4.9 specifies the tier; it is not built).
 
+  **Owned as of 2026-08-29:** the M3-T2 spec puts this work inside that task rather than leaving it
+  to be inherited — a criterion that cannot be executed is not a criterion. The spec's resolution is
+  a `PERPCARRY_SANITIZER=thread` CMake option covering the queue stress test only, run in the
+  per-PR CI tier rather than waiting on the nightly tier that does not exist (C10: a rigor claim CI
+  does not run is a claim about the past). Note that `cpp/tests/CMakeLists.txt` hard-errors when
+  tests are on and tools are off, so the sanitizer configuration has to satisfy that.
+
 ---
 
 ## Resolved

@@ -287,3 +287,28 @@ by luck, and it fails in the direction that looks like success. Where a value mu
 a writer and a reader, export it from the writer as a named constant so both sides import one thing.
 Relatedly, prefer running at least one check against genuine data before believing a green suite —
 see [[C12]] on tests that pass without exercising what they claim.
+
+---
+
+## C16 — Put fixture values off the boundary where two rules agree
+
+Learned 2026-08-29, from M2-T3.
+
+The clean-run sampler anchors its midday target to the UTC day the first compared image falls in,
+not to that image's own timestamp. Both rules were plausible; only one is right, because a real
+export opens a little *after* midnight (`0GUSDT` 2026-06-01 opens at 00:00:01.245) and a
+first-image anchor drifts the target past the midday image.
+
+The test fixture used a day starting at exactly 00:00:00.000. At that value the two rules compute
+the identical target, so the test passed under either, and the mutation that swapped one for the
+other **survived** — the only mutation of seven that did. Moving the fixture's open to
+00:00:00.137, which is simply what real data looks like, made the two rules disagree and the
+mutation was caught immediately.
+
+**How to apply.** When a value in a fixture sits on a boundary — zero, an exact day or hour
+boundary, an empty collection, the first or last element — ask whether the rule under test and its
+plausible wrong twin would give the same answer there. If they would, the fixture cannot see the
+property, however thorough the assertions look. Prefer values drawn from what the real input
+actually looks like; the round-numbered ones are the ones that hide things. This is [[C12]]'s
+discipline applied to fixture *values* rather than to whether a test exists at all, and it is why
+C12 must be run rather than assumed: the survival is what exposed the degenerate fixture.

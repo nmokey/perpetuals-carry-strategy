@@ -38,6 +38,17 @@ struct BookDiff {
   std::size_t size() const { return differences.size(); }
 };
 
+// Ranks a top-`depth` comparison can speak about at all, given how many levels each side
+// holds. Past `depth` the reference says nothing, and our ~1000-level book against a
+// 25-level image is the expected shape rather than a defect.
+//
+// Exported rather than kept private because M2-T3's renderer must draw exactly the window
+// this function compared. A renderer that recomputed the same rule would be a second
+// source of truth that can only ever agree by luck, and would disagree in the direction
+// that looks like success -- a diff quietly omitting the rank that differs (C15).
+std::size_t compared_rank_count(std::size_t replayed_levels, std::size_t reference_levels,
+                                std::size_t depth);
+
 // Compares the top `depth` levels per side.
 //
 // Equality is exact, with no tolerance, and that is deliberate: both sides hold float64

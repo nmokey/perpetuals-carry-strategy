@@ -10,8 +10,8 @@ Milestone status at a glance:
 |---|---|
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
-| M2 — Order book reconstruction (C++) | In progress — T1 (2026-08-22) and T2 (2026-08-29) complete; T3 specced |
-| M3 — Bindings & SPSC queue | Not started |
+| M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
+| M3 — Bindings & SPSC queue | Specced (T1–T3, 2026-08-29); not started. OD-6 resolved |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
@@ -21,6 +21,64 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-29 — OD-6 resolved; M3 specced (T1–T3)
+
+OD-6 resolved as option (b) — single-threaded core plus an SPSC queue (D-020), design doc Status
+line updated. Two points recorded that §6 did not make: option (c) cannot be benchmarked honestly,
+since a backtest replays one totally ordered stream and has no concurrent writers for per-level
+locking to protect against; and the queue may change *when* an item is consumed but never *which* or
+*in what order*, so no simulation behaviour may depend on occupancy or producer timing. That second
+one is a determinism constraint, and M3-T2 makes it a test rather than a comment.
+
+**Three drifts found reviewing M3 against the codebase, all folded into the specs:**
+
+1. **M3-T1 is no longer on the validation path.** Its criterion ("book state queried from Python
+   matches C++ fixture tests") was written assuming bindings would validate the book against vendor
+   data. D-018 closed that loop through the CSV harness instead, precisely because M3-T1 depends on
+   M2-T2. The spec says so, and redirects the Python tests at the *boundary* — ordering, truncation,
+   float fidelity, lifetimes — rather than re-asserting book semantics that 51 C++ tests already
+   cover, which would be C15's two-copies-of-one-assumption in a second language.
+2. **`OrderBook::levels()` returns a span invalidated by the next `apply()`.** Bound naively that is
+   a dangling view into Python that keeps returning plausible numbers. M3-T1 requires a copy at the
+   boundary and a test that fails on a zero-copy binding.
+3. **M3-T3's "M2-T2 checkpoint" names an artifact that has never existed** — grepped; the word
+   appears nowhere outside the design doc. Defined in the M3-T3 spec as the committed JSON counts
+   plus a SHA-256 of M2-T3's `dump_csv`. The dump is pure and deterministic so the digest is stable,
+   and a digest is publishable where the dump plainly is not (Tardis 9.2(2)).
+
+**TSan is now owned rather than inherited.** `blockers.md` had it as an unassigned gap; M3-T2's spec
+puts the build work inside that task, in the per-PR CI tier rather than the nightly tier that does
+not exist (C10).
+
+
+## 2026-08-29 — M2-T3: book state debug serialization
+
+`format_price`, `dump_csv`, `format_ladder` and `format_diff` in `perpcarry_core`
+(`cpp/include/perpcarry/book_debug.hpp`, `cpp/src/book_debug.cpp`); the harness's one-line-per-level
+stopgap replaced by the side-by-side ladder, plus clean-run sampling. 50 C++ tests (was 36) and 264
+Python tests, all green; ruff clean; wheel rebuilt and `perpcarry_cpp` imports.
+
+**Verified against real data, not only fixtures.** `0GUSDT` 2026-06-01 through
+`perpcarry_replay_validate`: 277,590 images, verdict `pass`, 2.4s, three samples rendered at
+00:00:01.245, 12:00:00.034, 23:59:59.598. Then the failure path on a scratch copy of the same day
+with one reference quantity perturbed — the defect was found and rendered as a marked ladder, and
+the truncation's own ambiguous mismatch carried the `AMBIGUOUS PAIRING` caveat. Nothing was written
+under `data/` or into the repo; scratch copies deleted.
+
+**Seven mutations, seven caught — after one survived.** Replacing `to_chars` with `%.8f`, echoing
+the depth back as the ladder's level count, re-deriving the diff's rank window, dropping the
+ambiguity caveat, dropping the close sample, printing clean samples on a failing run, and anchoring
+the midday target to the first image instead of the UTC day. The last one *survived* initially:
+the fixture's day opened at exactly 00:00:00.000, where both candidate rules give the same answer.
+Moving the fixture's open to 00:00:00.137 — which is what a real export looks like — made the
+distinction observable and the mutation was then caught. Recorded as C16.
+
+**One draft claim retracted.** The spec said a CSV dump would be `diff`-able against a pyarrow
+reference export. It is not: shortest round-trip and pyarrow's rendering disagree textually on
+values they agree on numerically, and round-trip is the property that has to win. The header
+comment and the spec now say to compare values, not lines.
+
 
 ## 2026-08-29
 

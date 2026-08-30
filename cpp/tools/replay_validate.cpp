@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include "perpcarry/book_debug.hpp"
+
 namespace perpcarry::tools {
 namespace {
 
@@ -155,6 +157,12 @@ class ReferenceStream {
     advance();
   }
 
+  // Whether another image follows the one just returned. Exact, not a guess: the reader
+  // already holds the next row. This is what lets the last *compared* image be sampled in
+  // a single pass -- the alternative, re-rendering a ladder at every image so the most
+  // recent one is always in hand, would cost 2.3M renders on a BTCUSDT day.
+  bool has_more() const { return has_; }
+
   bool next(ReferenceImage& image) {
     if (!has_) return false;
     image.timestamp = pending_.timestamp;
@@ -210,18 +218,13 @@ class ReferenceStream {
   bool has_ = false;
 };
 
-const char* kind_name(DiffKind kind) {
-  switch (kind) {
-    case DiffKind::PriceMismatch:
-      return "price";
-    case DiffKind::QuantityMismatch:
-      return "quantity";
-    case DiffKind::MissingLevel:
-      return "missing";
-    case DiffKind::ExtraLevel:
-      return "extra";
-  }
-  return "unknown";
+constexpr std::int64_t kMsPerDay = 86'400'000;
+
+// Start of the UTC day containing `timestamp`, in epoch ms (D-013). The double modulo
+// floors rather than truncates, so a pre-epoch timestamp would not round the wrong way --
+// unreachable with real data, and cheap enough not to reason about twice (C14).
+std::int64_t utc_day_start(std::int64_t timestamp) {
+  return timestamp - ((timestamp % kMsPerDay) + kMsPerDay) % kMsPerDay;
 }
 
 }  // namespace
@@ -233,6 +236,14 @@ ValidationSummary validate(std::istream& events, std::istream& reference,
   ReferenceStream images(reference);
   BookReplayer replayer;
   ReferenceImage image;
+
+  // Clean-run samples: open, midday, close. Held rather than printed, because whether the
+  // run is clean is only known once it ends -- and on a failing run these would bury the
+  // ladders that explain the failure. Three strings, not three books.
+  std::vector<std::string> clean_renders;
+  std::int64_t midday_target = 0;
+  bool sampled_open = false;
+  bool sampled_midday = false;
 
   while (images.next(image)) {
     ++summary.images;
@@ -261,6 +272,33 @@ ValidationSummary validate(std::istream& events, std::istream& reference,
       ++summary.orphan_images;
       continue;
     }
+
+    // Sampling for the clean-run rendering, in the same single pass. "Evenly spaced" is not
+    // computable here -- the last image's timestamp is unknown until the stream ends -- so
+    // the targets are wall-clock, taken from the UTC day the first compared image falls in.
+    // Only compared images are eligible: rendering an orphan would show a book that nothing
+    // checked. If the final image happens to be an orphan there is no close sample and the
+    // run reports two, which is the honest outcome rather than a third invented one.
+    if (options.diagnostics != nullptr) {
+      const char* label = nullptr;
+      if (!sampled_open) {
+        midday_target = utc_day_start(image.timestamp) + kMsPerDay / 2;
+        sampled_open = true;
+        label = "open";
+      } else if (!sampled_midday && image.timestamp >= midday_target) {
+        sampled_midday = true;
+        label = "midday";
+      } else if (!images.has_more()) {
+        label = "close";
+      }
+      if (label != nullptr) {
+        clean_renders.push_back("sample " + std::string(label) + " at " +
+                                std::to_string(image.timestamp) + "\n" +
+                                format_ladder(replayer.book(), options.depth));
+        summary.sample_clean_timestamps.push_back(image.timestamp);
+      }
+    }
+
     if (group > 1) {
       ++summary.ambiguous_images;
       if (!diff.empty()) {
@@ -268,17 +306,16 @@ ValidationSummary validate(std::istream& events, std::istream& reference,
         if (summary.sample_ambiguous_timestamps.size() < options.max_sample_mismatches) {
           summary.sample_ambiguous_timestamps.push_back(image.timestamp);
           if (options.diagnostics != nullptr) {
+            // The caveat is the harness's to print, not the renderer's: ambiguity is a
+            // property of how events were paired to this image, not of the levels that
+            // differ. Without it a reader chases a replay defect that may not exist.
             *options.diagnostics << "ambiguous mismatch at " << image.timestamp << " ("
-                                 << group << " events in this ms, " << diff.size()
-                                 << " level(s))\n";
-            for (const LevelDiff& level : diff.differences) {
-              *options.diagnostics << "  " << (level.side == Side::Bid ? "bid" : "ask")
-                                   << " rank " << level.rank << " " << kind_name(level.kind)
-                                   << ": replayed (" << level.replayed.price << ", "
-                                   << level.replayed.quantity << ") reference ("
-                                   << level.reference.price << ", " << level.reference.quantity
-                                   << ")\n";
-            }
+                                 << group << " events share this ms)\n"
+                                 << "  AMBIGUOUS PAIRING: their order relative to the image is "
+                                    "unrecoverable at ms resolution (D-013), so an ordering "
+                                    "artefact is as likely here as a replay defect\n"
+                                 << format_diff(diff, replayer.book(), image.bids, image.asks,
+                                                options.depth);
           }
         }
       }
@@ -308,15 +345,10 @@ ValidationSummary validate(std::istream& events, std::istream& reference,
     if (summary.sample_mismatch_timestamps.size() < options.max_sample_mismatches) {
       summary.sample_mismatch_timestamps.push_back(image.timestamp);
       if (options.diagnostics != nullptr) {
-        *options.diagnostics << "mismatch at " << image.timestamp << " (" << diff.size()
-                             << " level(s))\n";
-        for (const LevelDiff& level : diff.differences) {
-          *options.diagnostics << "  " << (level.side == Side::Bid ? "bid" : "ask") << " rank "
-                               << level.rank << " " << kind_name(level.kind) << ": replayed ("
-                               << level.replayed.price << ", " << level.replayed.quantity
-                               << ") reference (" << level.reference.price << ", "
-                               << level.reference.quantity << ")\n";
-        }
+        *options.diagnostics << "mismatch at " << image.timestamp
+                             << " (1 event in this ms, pairing forced)\n"
+                             << format_diff(diff, replayer.book(), image.bids, image.asks,
+                                            options.depth);
       }
     }
   }
@@ -329,6 +361,22 @@ ValidationSummary validate(std::istream& events, std::istream& reference,
 
   summary.replay = replayer.stats();
   summary.events = replayer.stats().applied;
+
+  // Only on a clean run. On a failing one these would push the ladders that explain the
+  // failure off the top of the screen, and the failure is what the reader came for.
+  if (summary.verdict() != ValidationSummary::Verdict::Pass) {
+    // Nothing was rendered, so nothing may be reported as rendered. Leaving these in would
+    // put timestamps in the summary that no reader can find output for, and the summary is
+    // the artifact a later reader trusts about a run they did not watch.
+    summary.sample_clean_timestamps.clear();
+  } else if (options.diagnostics != nullptr) {
+    *options.diagnostics << "no mismatches; " << clean_renders.size()
+                         << " sampled timestamp(s) rendered below so a passing run still "
+                            "shows its work\n";
+    for (const std::string& render : clean_renders) {
+      *options.diagnostics << render;
+    }
+  }
   return summary;
 }
 
@@ -380,6 +428,12 @@ void write_json(const ValidationSummary& summary, std::ostream& out) {
   for (std::size_t i = 0; i < summary.sample_ambiguous_timestamps.size(); ++i) {
     if (i != 0) out << ", ";
     out << summary.sample_ambiguous_timestamps[i];
+  }
+  out << "],\n";
+  out << "  \"sample_clean_timestamps\": [";
+  for (std::size_t i = 0; i < summary.sample_clean_timestamps.size(); ++i) {
+    if (i != 0) out << ", ";
+    out << summary.sample_clean_timestamps[i];
   }
   out << "]\n";
   out << "}\n";

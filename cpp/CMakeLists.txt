@@ -2,6 +2,7 @@
 # (order book reconstruction, impact simulation) so it stays unit-testable.
 add_library(perpcarry_core STATIC
   src/book_compare.cpp
+  src/book_debug.cpp
   src/book_replayer.cpp
   src/order_book.cpp
   src/version.cpp

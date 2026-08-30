@@ -423,7 +423,7 @@ Options:
 - (b) Single-threaded deterministic book core + lock-free SPSC queue decoupling ingestion/replay from simulation — mirrors a real feed-handler → strategy-engine boundary, genuinely motivated.
 - (c) Fully concurrent book with per-price-level locking/lock-free updates — realistic for live systems, but there are no real concurrent writers in a backtest, so the complexity isn't earned.
 Recommendation: (b). It's honestly motivated and gives a defensible artifact rather than a contrived one — this is the version worth being able to explain clearly in an interview.
-Status: OPEN, strongly leaning (b).
+Status: **RESOLVED 2026-08-29 — (b).** See D-020, which adds two things this section does not say: (c) cannot be benchmarked honestly because a backtest's single ordered event stream has no concurrent writers to protect against, and the queue must never let simulation behaviour depend on occupancy or producer timing, or determinism goes with it.
 
 **OD-7 — Impact model functional form**
 *Affects: M5-T2.*
