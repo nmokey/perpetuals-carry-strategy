@@ -1,7 +1,13 @@
 # M3-T1 — pybind11 bindings
 
 **Milestone:** M3
-**Status:** Draft
+**Status:** **Complete 2026-08-29.** `cpp/bindings/pybind_module.cpp` + `tests/test_bindings.py`;
+17 test items, 6 mutations run and 6 caught — after one survived (see below). Four deviations from
+this spec as drafted, all recorded in place: `Level` is not bound as a class (Q1 taken — levels and
+best cross as `(price, quantity)` tuples, so no `Level` type is needed on the Python side); four
+tests were added beyond the nine below; `BookReplayError` is registered as its own Python exception
+type; and the PyArrow→`BookUpdate` conversion is deferred to M3-T3, where it has a consumer, rather
+than landing here speculatively.
 **Depends on:** M2-T2 (complete 2026-08-29). No open design decision gates this task.
 **Design doc:** Section 4.4, Section 5 (M3), Risk R4
 
@@ -55,6 +61,22 @@ Expanded into checkable tests:
 
 Test 9 is cheap and pays out where it was not aimed (C14): every bound symbol is a compatibility
 commitment, and the surface is much easier to keep small than to shrink later.
+
+**Four tests added during implementation, three of them for things this spec did not anticipate:**
+
+| # | Test | Why it was added |
+|---|---|---|
+| 10 | An empty book returns `None` from `best_bid`/`best_ask`, not a `(0.0, 0.0)` sentinel | A sentinel price crossing as "no bid" is a silently wrong number, and `std::optional` has no natural Python form until one is chosen |
+| 11 | A book obtained from a `BookReplayer` stays valid after the replayer is dropped | **The second lifetime hazard, which this spec named only the first of.** `BookReplayer::book()` returns a C++ reference; bound with `return_value_policy::reference` rather than `reference_internal`, `book = r.book(); del r` reads freed memory |
+| 12 | `BookReplayError` is catchable as its own type | A replay rejecting its input is a different situation from a bug in the caller, and M3-T3 needs to tell them apart |
+| 13 | `BookReplayer` has **no** single-row `apply` on the Python side | Risk R4 as a regression guard rather than a comment — the per-row door is the tempting one |
+
+**One mutation survived the first pass, and the gap it exposed was real.** Narrowing `levels()`'s
+output to `float` passed the whole suite: test 4 asserted round-trip fidelity only through
+`best_bid()`, and `levels()` is a *separate* emitting path — the one M5 actually walks for depth,
+so the more important of the two. Test 4 now asserts through both. Test 11's mutation
+(`reference_internal` → `reference`) segfaults deterministically at the line after `del`, which is
+the strongest available signal that the keep-alive is doing work.
 
 ## Design
 
@@ -118,15 +140,15 @@ the number embarrassing.
 
 ## Open questions
 
-**Q1 — `levels()` as a list of tuples, or a NumPy array?**
+**Q1 — `levels()` as a list of tuples, or a NumPy array? Taken: list of tuples.**
 Recommendation: list of tuples first. M5 consumes depth in Python-level code, the arrays are ~25–1000
 rows, and NumPy in the signature is a dependency in the wheel's public API. Revisit if M10 shows the
 conversion mattering; the test that pins the copy semantics does not care which is chosen.
 
-**Q2 — expose `BookReplayer::Stats`?**
+**Q2 — expose `BookReplayer::Stats`? Taken: yes, as `ReplayStats`.**
 Recommendation: yes. It is counts only, it is what M3-T3's smoke test asserts on, and it carries no
 book data across the licence boundary.
 
-**Q3 — should the batch entry point accept a PyArrow table directly?**
+**Q3 — should the batch entry point accept a PyArrow table directly? Taken: no.**
 Recommendation: no, not yet. It would put Arrow's C++ headers into the build, which D-012 explicitly
 avoided. Take a sequence of plain rows and let Python do the unpacking until a profile says otherwise.

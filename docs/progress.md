@@ -11,7 +11,7 @@ Milestone status at a glance:
 | M0 — Scaffolding & environment | **Complete** (2026-08-12), T1–T6, CI green |
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
-| M3 — Bindings & SPSC queue | Specced (T1–T3, 2026-08-29); not started. OD-6 resolved |
+| M3 — Bindings & SPSC queue | In progress — T1 complete (2026-08-29); T2/T3 specced. OD-6 resolved |
 | M4 — Impact simulator (C++) | Not started |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
@@ -21,6 +21,34 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-29 — M3-T1: pybind11 bindings
+
+`cpp/bindings/pybind_module.cpp` grows from a `version()` stub to the real surface: `Side`,
+`BookUpdate`, `ReplayStats`, `OrderBook`, `BookReplayer`, `BookReplayError`. 17 test items in
+`tests/test_bindings.py`; 281 Python tests (was 264) and 51 C++ tests green, ruff clean.
+
+**Levels cross as copies, deliberately.** `OrderBook::levels()` returns a span its own header
+documents as invalidated by the next `apply()` — correct on the C++ side, where it lets M4 walk the
+book without allocating. Handed to Python as a view it becomes an object that keeps returning
+numbers and returns garbage after the next update, surfacing as a plausible fill price rather than
+as a crash. The binding builds a fresh list, which makes that structurally impossible.
+
+**A second lifetime hazard the spec had not named.** `BookReplayer::book()` returns a C++
+reference; bound with `reference` rather than `reference_internal`, `book = r.book(); del r` reads
+freed memory. Now pinned by a test that segfaults deterministically under the mutation.
+
+**Six mutations, six caught — after one survived.** Narrowing `levels()`'s output to `float` passed
+the entire suite, because the round-trip test asserted only through `best_bid()` and `levels()` is a
+separate emitting path — the one M5 actually walks for depth. The test now covers both. Same lesson
+as C16 in a different costume: a test aimed at a property has to cover every path that produces it,
+not just the first one written.
+
+**Deliberately not bound:** the M2-T3 renderers and `compare_top_n`/`BookDiff` (harness's job, on the
+far side of a licence boundary), and any single-row entry point on `BookReplayer` — Risk R4, now a
+test rather than a comment. The PyArrow→`BookUpdate` conversion is left to M3-T3, where it has a
+consumer.
+
 
 ## 2026-08-29 — OD-6 resolved; M3 specced (T1–T3)
 
