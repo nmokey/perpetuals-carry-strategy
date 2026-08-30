@@ -114,7 +114,15 @@ class SPSCQueue {
   // reporting and for M3-T3's "the queue actually filled" check; never for a decision the
   // simulation's output depends on, which is exactly what D-020 forbids.
   std::size_t size_approx() const {
-    return tail_.load(std::memory_order_acquire) - head_.load(std::memory_order_acquire);
+    // head_ is loaded *first*, in its own statement, and that is load-bearing rather than
+    // stylistic. C++ does not order the operands of `-`, so `tail_.load() - head_.load()`
+    // may read tail first; if head then advances past that sampled tail before its own
+    // load, the unsigned subtraction underflows to an astronomically large size_t rather
+    // than to something obviously wrong. Sampling head first is safe unconditionally:
+    // head <= tail holds at every instant, so any later tail is >= the head already read.
+    const std::size_t head = head_.load(std::memory_order_acquire);
+    const std::size_t tail = tail_.load(std::memory_order_acquire);
+    return tail - head;
   }
 
   bool empty() const { return size_approx() == 0; }

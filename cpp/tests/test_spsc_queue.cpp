@@ -211,17 +211,24 @@ TEST_CASE("ten million items cross two threads exactly once and in order", "[sps
   std::int64_t expected = 0;
   std::int64_t value = 0;
   bool ordered = true;
+  // A cheap invariant, checked on every iteration rather than at the end: an occupancy
+  // above capacity is impossible, so seeing one means the unsigned subtraction inside
+  // size_approx() underflowed -- which is what happens if its two loads are read in the
+  // wrong order. Not the defect this test was written for, which is rather the point (C14).
+  bool occupancy_sane = true;
   while (expected < kItems) {
     if (!queue.try_pop(value)) {
       std::this_thread::yield();
       continue;
     }
+    if (queue.size_approx() > queue.capacity()) occupancy_sane = false;
     if (value != expected) ordered = false;
     ++expected;
   }
   producer.join();
 
   REQUIRE(ordered);                 // none lost, none duplicated, none reordered
+  REQUIRE(occupancy_sane);
   REQUIRE(expected == kItems);
   REQUIRE(queue.empty());
   REQUIRE(producer_ok.load(std::memory_order_acquire));

@@ -122,3 +122,17 @@ def test_the_committed_m2_t2_summary_is_found_where_the_runner_looks():
     assert summary["symbol"] == "0GUSDT"
     assert summary["verdict"] == "pass"
     assert run_pipeline.m2_t2_summary("NOSUCHSYMBOL", "2026-06-01") is None
+
+
+def test_a_missing_validation_directory_raises_rather_than_reporting_no_summary(monkeypatch):
+    """The two failure modes must not collapse into one.
+
+    ``m2_t2_summary`` finds the directory relative to its own source file, which holds for a
+    source checkout and not for an installed wheel. If a missing directory returned ``None``
+    like a missing summary does, the checkpoint comparison would be skipped and the run would
+    report success having compared nothing (C15).
+    """
+    monkeypatch.setattr(run_pipeline, "__file__", "/nonexistent/a/b/c/run_pipeline.py")
+
+    with pytest.raises(run_pipeline.PipelineRunError, match="no validation directory"):
+        run_pipeline.m2_t2_summary("0GUSDT", "2026-06-01")

@@ -87,9 +87,23 @@ def checkpoint_digest(book: perpcarry_cpp.OrderBook, depth: int = 25) -> str:
 
 
 def m2_t2_summary(symbol: str, date: str) -> dict | None:
-    """The committed M2-T2 result for this symbol-day, if one exists."""
-    path = Path(__file__).resolve().parents[3] / "docs" / "validation"
-    candidate = path / f"M2-T2-{symbol}-{date}.json"
+    """The committed M2-T2 result for this symbol-day, if one exists.
+
+    Returns ``None`` only when the directory is there and holds no summary for this
+    symbol-day. A *missing directory* raises instead, and the distinction matters more than
+    it looks: this path is derived from the module's own location, which holds for a
+    source checkout and not for an installed wheel. Collapsing the two cases would let the
+    checkpoint comparison be skipped silently in the second, and the run would then report
+    success having compared nothing -- a check that passes by not running (C15).
+    """
+    directory = Path(__file__).resolve().parents[3] / "docs" / "validation"
+    if not directory.is_dir():
+        raise PipelineRunError(
+            f"no validation directory at {directory}: this tool locates it relative to its "
+            "own source file, which only works from a source checkout. Run it from the "
+            "repository rather than from an installed copy."
+        )
+    candidate = directory / f"M2-T2-{symbol}-{date}.json"
     if not candidate.exists():
         return None
     return json.loads(candidate.read_text())
