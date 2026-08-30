@@ -17,15 +17,22 @@ design decisions.
 
 ## Status
 
-**M0 and M1 complete.** The whole ingestion layer works: partitioned Parquet storage, archive
-download helpers (streamed, checksum-verified, cached), historical **trades**, **funding rate** and
-**L2 order book** downloaders, symbol tick/step derivation committed as a reviewed lookup table,
-and a corpus-level **data validation** pass usable as a gate.
+**M0–M3 complete.** The ingestion layer works: partitioned Parquet storage, archive download
+helpers (streamed, checksum-verified, cached), historical **trades**, **funding rate** and **L2
+order book** downloaders, symbol tick/step derivation committed as a reviewed lookup table, and a
+corpus-level **data validation** pass usable as a gate.
 
-**M2 is under way.** The C++ core reconstructs an L2 book from the vendor's snapshot-and-diff feed,
-and the replay is checked against the vendor's *independently constructed* top-25 snapshots:
-564,783 book images across two symbols, zero mismatches, exact equality with no tolerance. Debug
-serialization (M2-T3) is next; the impact simulator is M4.
+The C++ core reconstructs an L2 book from the vendor's snapshot-and-diff feed, and the replay is
+checked against the vendor's *independently constructed* top-25 snapshots: 564,783 book images
+across two symbols, zero mismatches, exact equality with no tolerance. A failed comparison renders
+as a side-by-side ladder rather than a boolean.
+
+The pipeline is assembled end to end — Parquet → PyArrow → pybind11 → replay → lock-free SPSC queue
+→ consumer. One real symbol-day replays in ~3.5s, reproducing the validated event count exactly,
+and the resulting book digest is identical across runs and across an 8192× change in queue capacity.
+
+**Next: M4**, the impact simulator — the first component that turns book state into a number the
+research claim depends on.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.
@@ -37,7 +44,9 @@ are geo-blocked from the development location. Nothing needs to run continuously
 ## Layout
 
 ```
-cpp/      C++ core: order book reconstruction, impact simulation, SPSC queue, pybind11 bindings
+cpp/      C++ core: order book, replay, comparison + debug rendering, SPSC queue,
+          threaded pipeline, pybind11 bindings; cpp/tools/ for the local dev tools
+          that are allowed file I/O (the core does none)
 python/   Research layer: ingestion, statistical models, strategy/backtest, reporting
 tests/    pytest suite mirroring python/
 data/     gitignored local Parquet storage
@@ -83,7 +92,19 @@ GitHub Actions runs both build paths on every push and pull request, across Linu
 
 - **`python`** — `uv sync --locked` (which compiles the extension), then ruff and pytest
 - **`cpp`** — standalone CMake configure/build, then `ctest`
+- **`sanitizer`** — ThreadSanitizer over the lock-free queue's stress test (Linux)
 
 The commands are the same ones listed above, so a green CI run means the local instructions work.
-Heavier checks (ThreadSanitizer, full backtests, a reproducibility gate) are planned for a nightly
-tier — see design doc Section 4.9.
+
+The sanitizer job runs per-PR rather than nightly: it costs a few seconds, and a rigor claim CI does
+not run is a claim about the past. It was verified to *fail* on a real defect — weakening the
+queue's release/acquire pair to relaxed produces a reported race and a non-zero exit — because a
+sanitizer that has only ever passed proves nothing. Remaining heavy checks (full backtests, a
+reproducibility gate) are still planned for a nightly tier; see design doc Section 4.9.
+
+```bash
+# Reproduce the sanitizer job locally
+uv run cmake -S . -B build/tsan -G Ninja -D PERPCARRY_SANITIZER=thread -D PERPCARRY_BUILD_PYTHON=OFF
+uv run cmake --build build/tsan
+TSAN_OPTIONS=halt_on_error=1 ./build/tsan/cpp/tests/perpcarry_tests "[spsc]"
+```

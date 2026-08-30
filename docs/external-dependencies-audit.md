@@ -138,6 +138,14 @@ independently constructed from the same feed. Replaying `incremental_book_L2` an
 top 25 levels against it is a stronger check than a manual UI spot-check, and it is automatable.
 M2-T2/M2-T3 should be rewritten around it.
 
+**Done 2026-08-29.** Both were. M2-T2 compares every image with exact equality and no tolerance —
+564,783 across two symbols, zero mismatches (D-019, `docs/validation/`) — and M2-T3 renders a
+failure as a side-by-side ladder. The replacement turned out *stronger* than the route it replaced
+in a way worth noting: a UI spot-check would have compared a handful of levels by eye, where this
+compares 25 levels at every image and fails on a single-bit difference. The residual weakness is
+depth, not fidelity — nothing constrains below level 25 — and that is tracked separately on the
+watch list, where it bites at M4.
+
 ### A6 — Venue-reported volume. Holds via a different route.
 
 `/fapi/v1/ticker/24hr` is geo-blocked, but `daily/klines/{SYM}/1m/` is in the archive (verified

@@ -67,13 +67,11 @@ Not blocking yet; will bite at the milestone named.
   must use a streamed `GET` and read `content-length`. A `HEAD`-based estimate silently reports the
   book datasets as absent and undercounts the total by the largest term.
 
-- **M4-T2's dependency edge is tighter than necessary.** M4-T2 is listed as depending on M3-T2
-  (the SPSC queue), but it can be developed and unit-tested against synthetic fixtures first; the
-  dependency is real only for the validate-against-real-data half of the acceptance criterion.
-  Don't let the doc's edge serialize work that could proceed in parallel.
-
-  *M2-T1's edge (on M1-T4) is no longer a concern — M1-T4 completed 2026-08-20, so the dependency
-  is satisfied rather than merely bypassable.*
+- ~~**M4-T2's dependency edge is tighter than necessary.**~~ **Moot as of 2026-08-29:** M3-T2
+  completed, so the edge is satisfied rather than merely bypassable, exactly as M2-T1's edge on
+  M1-T4 was. The reasoning is kept because it was right and may recur: an edge drawn for the
+  validate-against-real-data half of a criterion should not serialize the half that can be built
+  against synthetic fixtures. No dependency edge in the doc currently blocks anything.
 
 - **M7-T4 is sequenced after M7-T3, but T3 needs it.** The backtest loop's P&L requires fee and
   funding settlement accounting. Expect to build a minimal settlement model inside T3 and refine
@@ -110,6 +108,13 @@ Not blocking yet; will bite at the milestone named.
   pair with an injected defect, so the mechanism is continuously tested and only the input is
   manual. Re-run the real check whenever `OrderBook` or `BookReplayer` changes, and state the gap
   in the M9 writeup rather than letting a reviewer find it.
+
+  **Widened 2026-08-29:** M3-T3's pipeline run is in the same category and is covered the same way
+  — synthetic in CI, real run local and recorded in `docs/validation/`. Its checkpoint is a SHA-256
+  of the final book's `dump_csv`, which is committable precisely because a digest exposes no levels.
+  The re-run trigger now reads: whenever `OrderBook`, `BookReplayer`, `Pipeline` or the book
+  rendering changes. Two local runs are currently the evidence base — `M2-T2-*.json` and
+  `M3-T3-*.json` — and both name the commit that produced them.
 
 
 ---

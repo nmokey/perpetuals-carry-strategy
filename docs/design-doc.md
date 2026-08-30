@@ -197,7 +197,9 @@ Maintains L2 book state from a snapshot + sequential diffs. Deterministic, singl
 Given a hypothetical order (side, size, timing), walks the reconstructed book to compute realized fill price and slippage. Supports both a static single-shot book walk and a time-sliced TWAP/VWAP-style simulation against an evolving book.
 
 ### 4.4 Python Bindings (pybind11)
-Exposes `OrderBook`, `BookReplayer`, and the impact simulator to Python. Boundary is the SPSC-queue-decoupled pipeline output — not a per-tick call across the C++/Python boundary, to keep interop overhead out of the "low-latency" story (see OD-6, Risk R4 in Section 8).
+Exposes `OrderBook`, `BookReplayer`, `Pipeline` and (from M4) the impact simulator to Python. Boundary is the SPSC-queue-decoupled pipeline output — not a per-tick call across the C++/Python boundary, to keep interop overhead out of the "low-latency" story (see OD-6, Risk R4 in Section 8).
+
+**As built (M3-T1/M3-T3), two things this paragraph did not say.** The surface is pinned by a test, so binding a new symbol is a deliberate act rather than a side effect of the C++ function existing; and `OrderBook::levels()` is **copied** across the boundary rather than viewed, because the C++ span is invalidated by the next `apply()` and a stale view would surface as a plausible wrong fill price rather than as a crash. `BookReplayer` has no single-row entry point on the Python side — that is Risk R4 in its most tempting form, and it is enforced by a test.
 
 ### 4.5 Impact Model Calibration (Python, regression)
 Fits a market impact model (linear and/or square-root functional form, see OD-7) against simulated slippage data across a range of order sizes, using out-of-sample validation rather than in-sample fit alone.
@@ -222,8 +224,14 @@ CI is tiered as the project grows, because the expensive checks cannot live in t
 
 | Tier | Contents | Trigger |
 |---|---|---|
-| Per-PR | ruff, pytest, `ctest`, both OSes | push / PR |
-| Nightly | ThreadSanitizer queue stress (M3-T2), full backtests (M8), reproducibility gate | schedule |
+| Per-PR | ruff, pytest, `ctest`, both OSes; **ThreadSanitizer over the SPSC queue** | push / PR |
+| Nightly | full backtests (M8), reproducibility gate | schedule |
+
+**Revised 2026-08-29 (M3-T2).** TSan was planned for the nightly tier and landed in the per-PR one
+instead: the queue stress run costs ~4 s even instrumented, and deferring it to a tier that does not
+yet exist would have meant shipping the queue with its acceptance criterion unexecuted. The
+principle behind the split still holds for the genuinely expensive checks below — it just did not
+apply to this one.
 
 The **reproducibility gate** is the important one: a scheduled end-to-end re-run that fails if
 headline results move without a corresponding commit. That is the automated form of this
@@ -487,12 +495,12 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 
 ## 7. Success Metrics
 
-- Order book reconstruction validated against reference snapshots within a documented depth-level tolerance.
+- ~~Order book reconstruction validated against reference snapshots within a documented depth-level tolerance.~~ **Met 2026-08-29, and the tolerance turned out to be zero.** 564,783 `book_snapshot_25` images across two symbols, top 25 levels, **exact equality on price and quantity with no epsilon** — both sides hold values only ever copied from the vendor's decimal text, never computed, so there is nothing for a tolerance to absorb (D-019). State the real limitation instead: the reference constrains only the top 25 of a ~1000-level book, roughly 2.5% by level count, and M4 walks deeper than that.
 - Impact model shows a statistically meaningful, out-of-sample-validated relationship between order size and slippage (not just in-sample fit).
 - Backtest produces a concrete, defensible capacity finding: a specific size (or range) at which net-of-cost P&L crosses zero, for at least one symbol — reported as a function of fee level, since no historical fee schedule is obtainable (OD-11).
-- SPSC queue throughput benchmark documented with a specific events/sec figure.
+- ~~SPSC queue throughput benchmark documented with a specific events/sec figure.~~ **Met 2026-08-29: 55.8M items/sec median, range 43.0–59.7M** (`BookUpdate`, 40 bytes, capacity 65536, arm64/clang/RelWithDebInfo — `docs/validation/M3-T2-throughput.json`). Quote the median with its range and not the maximum: a single sample varies ~25% run to run, which is why the tool reports a distribution. And frame it honestly — in a backtest the producer is reading a file, so this measures the structure's capacity in isolation, not backtest latency (D-020).
 - Look-ahead bias explicitly tested and ruled out via the M7-T3 poisoning test — this artifact alone directly answers a gap called out in prior resume feedback.
-- The rigor artifacts are *enforced*, not just written once: the look-ahead poisoning test, fixed-seed determinism checks, and both build paths run in CI rather than depending on someone remembering to re-run them.
+- The rigor artifacts are *enforced*, not just written once: the look-ahead poisoning test, fixed-seed determinism checks, and all three build paths (Python, standalone C++, ThreadSanitizer) run in CI rather than depending on someone remembering to re-run them. **Partly met:** the sanitizer job landed per-PR on 2026-08-29 and was verified to fail on an injected race. The known, deliberate exception is the book's real-data validation, which the vendor licence forbids CI from ever seeing — tracked in `blockers.md` and to be stated in the M9 writeup rather than left for a reviewer to find.
 - Project is stoppable and coherent after M4 (systems core), after M7 (full research pipeline), or after M9 (polished writeup) — no single point of total failure.
 
 ## 8. Risks & Mitigations
@@ -517,20 +525,26 @@ perpcarry/
 │       └── ci.yml         # lint + pytest + ctest, Linux & macOS
 ├── cpp/
 │   ├── include/perpcarry/
-│   │   ├── order_book.hpp
-│   │   ├── book_replayer.hpp
-│   │   ├── spsc_queue.hpp
-│   │   └── impact_simulator.hpp
+│   │   ├── order_book.hpp           # M2-T1
+│   │   ├── book_replayer.hpp        # M2-T2
+│   │   ├── book_compare.hpp         # M2-T2: compare_top_n -> BookDiff
+│   │   ├── book_debug.hpp           # M2-T3: dump_csv / format_ladder / format_diff
+│   │   ├── spsc_queue.hpp           # M3-T2, header-only template
+│   │   ├── pipeline.hpp             # M3-T3: the one threaded thing in the core
+│   │   └── impact_simulator.hpp     # M4, not yet written
 │   ├── src/
 │   │   ├── order_book.cpp
 │   │   ├── book_replayer.cpp
-│   │   └── impact_simulator.cpp
+│   │   ├── book_compare.cpp
+│   │   ├── book_debug.cpp
+│   │   ├── pipeline.cpp
+│   │   └── impact_simulator.cpp     # M4, not yet written
 │   ├── bindings/
 │   │   └── pybind_module.cpp
 │   ├── tools/                       # local dev tools; file I/O lives here, not in the core (D-018)
-│   │   └── replay_validate.cpp      # M2-T2 harness: replay vs book_snapshot_25
-│   ├── tests/
-│   │   └── test_order_book.cpp
+│   │   ├── replay_validate.cpp      # M2-T2 harness: replay vs book_snapshot_25
+│   │   └── queue_bench.cpp          # M3-T2 throughput measurement
+│   ├── tests/                       # one file per component, Catch2
 │   └── CMakeLists.txt
 ├── python/
 │   └── perpcarry/
@@ -550,7 +564,8 @@ perpcarry/
 │       ├── reporting/
 │       │   └── plots.py
 │       └── tools/
-│           └── export_book.py       # corpus -> CSV for the M2-T2 harness (D-018)
+│           ├── export_book.py       # corpus -> CSV for the M2-T2 harness (D-018)
+│           └── run_pipeline.py      # M3-T3: corpus -> pipeline -> checkpoint digest
 ├── tests/                 # pytest suite mirroring python/
 ├── data/                  # gitignored, local Parquet storage
 ├── notebooks/             # exploratory analysis
