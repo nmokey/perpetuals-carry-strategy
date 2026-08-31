@@ -437,7 +437,7 @@ Status: **RESOLVED 2026-08-29 — (b).** See D-020, which adds two things this s
 *Affects: M5-T2.*
 Options: linear (Almgren-Chriss-style temporary/permanent split), square-root law, or fit both and compare.
 Recommendation: Fit both — the comparison itself (e.g., "square-root fit the altcoin better, linear fit BTC better") is a legitimate finding worth reporting.
-Status: OPEN.
+Status: **RESOLVED 2026-08-30 — fit both, and report per size regime.** See D-024, which adds what this section does not say: the M4 sweep already shows the implied exponent climbing from 0.20 to 1.17 across the size range, so no single form describes the whole curve; fitting must use touch-relative slippage or the half-spread is double-counted downstream; and the super-linear large-order regime is precisely the one where the book is not independently validated (D-021).
 
 **OD-8 — Bayesian inference method**
 *Affects: M6-T2.*

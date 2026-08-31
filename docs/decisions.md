@@ -20,7 +20,7 @@ When an OD is resolved, update both the table below *and* the Status line in the
 | OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
 | OD-5 | Book reconstruction fidelity | **RESOLVED 2026-08-22** — L2, see D-017 | M2-T1 |
 | OD-6 | Concurrency model | **RESOLVED 2026-08-29** — (b) single-threaded core + SPSC queue, see D-020 | M3-T2 |
-| OD-7 | Impact model functional form | OPEN (recommendation: fit both, compare) | M5-T2 |
+| OD-7 | Impact model functional form | **RESOLVED 2026-08-30** — fit both, report per size regime, see D-024 | M5-T2 |
 | OD-8 | Bayesian inference method | OPEN, leaning closed-form conjugate | M6-T2 |
 | OD-9 | Entry/exit threshold policy | OPEN, leaning credible-interval | M7-T1 |
 | OD-10 | Position sizing / capacity model | OPEN, leaning capacity-curve | M7-T2, M8-T3 |
@@ -592,3 +592,59 @@ cheaper by construction. It belongs in the M9 caveats with the other stated appr
 **Cost.** `BookReplayer` gained a `mutable_book()` accessor, narrow in intent and not in signature:
 nothing stops a caller corrupting replay state with it, and nothing but the sliced simulator should
 use it. The replay statistics are unaffected — they count rows applied, not levels present.
+
+---
+
+## D-024 — OD-7 resolved: fit both functional forms, and report per size regime (2026-08-30)
+
+**Context.** OD-7 offered linear (Almgren-Chriss-style), square-root, or both. M5-T2's `Depends On`
+names it, so it had to be confirmed before that spec could be written.
+
+**Decision.** Fit both, and report the comparison **per size regime** rather than declaring a single
+winner. The design doc anticipated the first half; the second half comes from the data.
+
+**Choosing a form a priori would be the exact thing this project exists not to do.** The claim is
+"execution costs are calibrated, not assumed". A functional form picked before looking is an
+assumption in the most load-bearing place in the model, and the comparison is a deliverable in its
+own right rather than a step toward one.
+
+**The M4 probe already shows a single exponent will not do.** Fitting `slippage ~ size^alpha`
+pairwise across the M4 sweep on `0GUSDT` 2026-06-01 (mean over 259 instants):
+
+| size range | implied alpha |
+|---|---|
+| 100 → 1,000 | 0.197 |
+| 1,000 → 10,000 | 0.411 |
+| 10,000 → 50,000 | 0.506 |
+| 50,000 → 200,000 | 0.768 |
+| 200,000 → 1,000,000 | 1.167 |
+
+Square-root law is alpha = 0.5, linear is 1.0. The exponent **climbs monotonically across the
+range**, so neither law describes the whole curve and a single-form fit would be a compromise that
+is wrong at both ends. Three things are going on, and they should be modelled rather than averaged:
+
+1. **Small sizes are dominated by the half-spread**, which is a constant offset and not a power law
+   at all — it compresses the apparent exponent toward zero. This is measurement, not market: those
+   figures are slippage against the *mid*.
+2. **The mid-range sits close to the square-root law** (0.41–0.51), which is what the literature
+   predicts and is mild evidence the simulator is behaving.
+3. **Large sizes go super-linear** (1.167), consistent with an order eating into progressively
+   thinner book.
+
+**Two consequences for M5-T2, both non-obvious and both easy to get wrong.**
+
+*Fit against touch-relative slippage, not mid-relative.* `Fill` reports both (M4-T1). The
+half-spread is a separate cost component that M7 accounts for on its own; regressing on mid-relative
+slippage folds it into the impact coefficient, which double-counts it downstream and, as the table
+shows, distorts the exponent most exactly where impact is smallest.
+
+*The super-linear region is the least trustworthy part of the curve.* At 200,000 units 94.2% of
+fills walk past the validated depth, and at 1,000,000 it is 99.6% (D-021). So the regime where the
+data most clearly departs from the square-root law is the regime where the underlying book is not
+independently validated. That is not a reason to discard it — it is the region a capacity answer
+lives in — but any reported coefficient for it carries that caveat, and M9 must not present the
+large-order end with the same confidence as the small.
+
+**Not a finding yet.** Six discrete sizes, one symbol, one day, means rather than a fit, and against
+the wrong reference price for this purpose. It is enough to establish that the comparison is worth
+running and that a single form will not win outright; it is not the answer M5-T2 produces.

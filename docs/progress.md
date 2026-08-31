@@ -13,7 +13,7 @@ Milestone status at a glance:
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
 | M4 — Impact simulator (C++) | **Complete** (2026-08-30), T1–T3 |
-| M5 — Impact model calibration | Not started |
+| M5 — Impact model calibration | Specced (T1–T3, 2026-08-30); not started. OD-7 resolved |
 | M6 — Funding persistence model | Not started |
 | M7 — Strategy & backtest | Not started |
 | M8 — Comparative study | Not started |
@@ -21,6 +21,39 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-30 — OD-7 resolved; M5 specced (T1–T3)
+
+**D-024 resolves OD-7** — fit both functional forms, and report **per size regime**. The design doc
+anticipated the first half; the second half came from the M4 data. Fitting `slippage ~ size^alpha`
+pairwise across the M4 sweep, the implied exponent climbs monotonically: 0.197, 0.411, 0.506, 0.768,
+1.167. Square-root is 0.5 and linear is 1.0, so **neither describes the whole curve** and a
+single-form verdict would be wrong at both ends.
+
+Three mechanisms, worth modelling rather than averaging: small sizes are dominated by the
+half-spread (a constant offset, not a power law, which compresses the apparent exponent); the
+mid-range sits close to the square-root law, which is what the literature predicts and mild evidence
+the simulator behaves; large sizes go super-linear as the order eats into thinner book.
+
+Two consequences that are easy to get wrong and are now written down. **Fit against touch-relative
+slippage**, since folding the half-spread into an impact coefficient double-counts it in M7 and
+distorts the exponent exactly where impact is smallest. And **the super-linear regime is the least
+validated part of the curve** — 94.2% of fills at 200,000 units and 99.6% at 1,000,000 walk past the
+vendor's 25-level reference, so the region that departs most from square-root is the one nothing
+independently checks.
+
+**A blocker logged rather than discovered later: the corpus cannot support M5-T2's criterion.** Two
+usable symbol-days (`0GUSDT` 06-01 and 07-01), one symbol. The only out-of-sample split is
+fit-on-one/test-on-the-other — real, and a sample of one. The ceiling is structural: the free tier
+serves the first day of each month, so book coverage is ~12 days per symbol per year regardless of
+effort. M5-T2's spec carries a test that fails loudly rather than reporting an in-sample R² in an
+out-of-sample field.
+
+Also recorded in M5-T1: **M4 kept no rows.** The probe simulated 1,554 static fills and 480 sliced
+runs and retained only rates and means, so there is currently no dataset to fit anything to. That is
+M5-T1's job, and it begins by binding the simulator — deliberately left unbound in M4 on the stated
+grounds that M5-T1 would be its first Python consumer.
+
 
 ## 2026-08-30 — M4 made reproducible, and M4-T2 meets real data
 

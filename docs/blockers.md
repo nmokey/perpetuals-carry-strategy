@@ -125,6 +125,26 @@ Not blocking yet; will bite at the milestone named.
   `M3-T3-*.json` — and both name the commit that produced them.
 
 
+- **The corpus cannot support M5-T2's out-of-sample criterion, and the ceiling is structural.**
+  Measured 2026-08-30: `0GUSDT` has trades for 2026-06-01 → 07-31 and **3** book days (06-01, 07-01,
+  08-01), of which **2** have both book and trades; `BTCUSDT` has one book day and no trades. So the
+  calibration set is two symbol-days on one symbol.
+
+  M5-T2's criterion asks for out-of-sample R². With two days the only split is fit-on-one,
+  test-on-the-other — a genuine out-of-sample test across a month gap, and also a sample of one.
+  M8's cross-symbol comparison is not reachable at all.
+
+  **The ceiling is not a backlog item.** The Tardis free tier serves the *first day of each month*
+  (OD-2), so book coverage is ~12 days per symbol per year however long a pull runs; a 24-month
+  window yields at most 24 book days per symbol. That is the budget the entire calibration lives
+  inside.
+
+  Unblock: pull the remaining first-of-month book days for `0GUSDT`, and pick a second symbol with
+  overlapping trades so M8 has something to compare. Read the two entries above first — the book
+  size estimate is ~2x under, and the window's end date is still undecided. M5-T1 is buildable and
+  correct against what exists; it is M5-T2's *claim* that is thin, and M5-T2's spec carries a test
+  that fails loudly rather than reporting an in-sample R² in an out-of-sample field.
+
 ---
 
 ## Resolved
