@@ -22,6 +22,29 @@ Milestone status at a glance:
 
 ---
 
+## 2026-08-30 — bulk pull re-costed against stored Parquet and free disk
+
+`blockers.md` had asked for this before committing to the pull. Measured from partitions already on
+disk rather than from archive sizes: the 893 MB `BTCUSDT` book archive lands as **544 MB of
+Parquet** (161,057,093 rows at 3.5 bytes/row), so the storage bill is smaller than the download.
+
+Per symbol over a 24-month window — 24 book days (the free tier serves the first of each month) and
+~730 trade days: **`0GUSDT` ~0.8 GB, `BTCUSDT` ~31 GB, `ETHUSDT` ~40 GB.** Free disk: 15 GB.
+
+**The binding decision is which second symbol, not how long the window is.** Unblocking M5 is nearly
+free: `0GUSDT`'s remaining 21 first-of-month book days cost ~0.4 GB and take the calibration set
+from 2 usable days to 24 — the difference between an out-of-sample R² on a sample of one and a claim
+that means something. A second thin altcoin is ~1 GB. `BTCUSDT` and `ETHUSDT` do not fit at all.
+
+That makes **OD-3** — symbol selection, which the design doc defers to M8 — a decision with a
+storage consequence landing at M5. Recorded rather than resolved: the choice is still open, but it
+is no longer only about which symbols are interesting.
+
+Confidence stated with the numbers: `0GUSDT` and `BTCUSDT` are measured, trades/day varies ~7x with
+volatility so those are ±50%, and the `ETHUSDT` book figure is a guess — no ETH book day has ever
+been downloaded, and it is the largest unmeasured term.
+
+
 ## 2026-08-30 — OD-7 resolved; M5 specced (T1–T3)
 
 **D-024 resolves OD-7** — fit both functional forms, and report **per size regime**. The design doc

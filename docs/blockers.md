@@ -62,10 +62,47 @@ Not blocking yet; will bite at the milestone named.
   therefore ~23 GB for BTC book alone rather than the ~10.8 GB the spec budgets, before Parquet
   output and before ETH.
 
-  Re-cost the bulk pull against actual free disk before committing to it. Note also that
-  **Tardis does not answer `HEAD`** — it returns 404 where `GET` returns 200 — so any sizing probe
-  must use a streamed `GET` and read `content-length`. A `HEAD`-based estimate silently reports the
-  book datasets as absent and undercounts the total by the largest term.
+  Note also that **Tardis does not answer `HEAD`** — it returns 404 where `GET` returns 200 — so any
+  sizing probe must use a streamed `GET` and read `content-length`. A `HEAD`-based estimate silently
+  reports the book datasets as absent and undercounts the total by the largest term.
+
+  **Re-costed 2026-08-30 against stored Parquet and actual free disk**, which is what the pull is
+  really billed in — the 893 MB above is the compressed archive, and it lands as 544 MB of Parquet
+  (161,057,093 rows at 3.5 bytes/row). Per unit, measured from partitions on disk:
+
+  | | book day, incl. `book_snapshot_25` | trades/day |
+  |---|---|---|
+  | `0GUSDT` | 17 MB | 0.54 MB |
+  | `BTCUSDT` | **652 MB** | ~21 MB |
+  | `ETHUSDT` | not measured | ~38 MB |
+
+  A 24-month window is 24 book days per symbol (the free tier serves the first of each month) and
+  ~730 trade days:
+
+  | symbol | book | trades | total |
+  |---|---|---|---|
+  | `0GUSDT` | 0.4 GB | 0.4 GB | **~0.8 GB** |
+  | `BTCUSDT` | 15.6 GB | 15.3 GB | **~31 GB** |
+  | `ETHUSDT` | ~12 GB (estimated) | 27.7 GB | **~40 GB** |
+
+  **Free disk at the time of measuring: 15 GB.** So the binding decision is *which second symbol*,
+  not how long the window is:
+
+  - **Unblocking M5 is nearly free.** `0GUSDT`'s remaining 21 first-of-month book days cost ~0.4 GB
+    and take the calibration set from 2 usable days to 24 — the difference between an out-of-sample
+    R² on a sample of one and a claim that means something. The whole `0GUSDT` 24-month corpus is
+    under a gigabyte.
+  - **A second thin altcoin is ~1 GB** and fits trivially. `BTCUSDT` (~31 GB) and `ETHUSDT` (~40 GB)
+    do not fit at all. That makes **OD-3** — symbol selection, which the design doc defers to M8 —
+    a decision with a storage consequence that lands at M5, not M8.
+  - Reclaimable now: `data/validation/` is ~2 GB of regenerable CSV exports and `data/.cache/` ~1.2
+    GB of raw archives prunable after ingest, giving ~18 GB. Still short of BTC's full window,
+    though BTC *book only* — calibrating on BTC while backtesting on a thin symbol — would fit.
+
+  **Confidence.** The `0GUSDT` and `BTCUSDT` figures are measured from real partitions. The
+  trades/day rates come from three daily archives per symbol and vary ~7x with volatility (7.8–56 MB
+  for BTC), so treat them as ±50%. The `ETHUSDT` book figure is a guess: no ETH book day has ever
+  been downloaded, and it is the single largest unmeasured term in the table.
 
 - ~~**M4-T2's dependency edge is tighter than necessary.**~~ **Moot as of 2026-08-29:** M3-T2
   completed, so the edge is satisfied rather than merely bypassable, exactly as M2-T1's edge on
