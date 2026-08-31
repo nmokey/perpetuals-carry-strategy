@@ -73,6 +73,32 @@ decays as the real book refreshes. Crude, but taken from the data rather than as
 what makes "spreading an order over time is cheaper" a measured effect here rather than a
 construction.
 
+## Measured on real data, 2026-08-30
+
+The tests above run on synthetic books by necessity — vendor rows may not reach CI — so until
+`cpp/tools/impact_probe.cpp` existed this task had **never touched real data at all**. It has now.
+`0GUSDT` 2026-06-01, 40 sampled windows, each parent order worked over 10 s in 5 slices against
+taking it at once:
+
+| size (base units) | at once | worked over 10 s | slicing was cheaper |
+|---|---|---|---|
+| 100 | 1.50 bps | 1.59 bps | 52.5% |
+| 1,000 | 2.37 | 1.83 | 65.0% |
+| 10,000 | 6.10 | 3.81 | 87.5% |
+| 50,000 | 13.77 | 8.17 | 95.0% |
+| 200,000 | 39.95 | 20.97 | **100%** |
+| 1,000,000 | 261.32 | 186.22 | **100%** |
+
+**The criterion's second half holds on real data for large orders, and does not for small ones** —
+exactly the caveat written above before any of this was measured. At 100 units slicing is *worse*
+on average (1.59 against 1.50) and barely better than a coin flip on any given window: the order is
+small enough that the spread and the mid's own drift dominate, and there is nothing to save by
+waiting. By 200,000 units it is cheaper on every window sampled, and roughly halves the cost.
+
+That is the shape a capacity study wants, and it is a finding rather than a fixture property: the
+same monotonicity the synthetic book guarantees by construction turns out to be real where it
+matters and absent where the order is too small for impact to be the dominant term.
+
 ## Design
 
 **The simulator takes a schedule, not a policy.** TWAP and VWAP differ only in the weights; making

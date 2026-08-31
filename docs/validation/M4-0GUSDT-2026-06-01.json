@@ -1,0 +1,21 @@
+{
+  "task": "M4",
+  "what": "impact simulator sweep over a replayed symbol-day",
+  "produced_by": "perpcarry_impact_probe; re-run to reproduce",
+  "events": 1299113,
+  "sampled_instants": 259,
+  "sample_every_n_events": 5000,
+  "first_timestamp": 1780272001245,
+  "last_timestamp": 1780358399598,
+  "validated_depth": 25,
+  "sliced_window_ms": 10000,
+  "sliced_slices": 5,
+  "sizes": [
+    {"size": 100, "beyond_validated_depth_rate": 0.000000, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 1.502429, "sliced_mean_slippage_bps": 1.590763, "sliced_cheaper_rate": 0.525000, "sliced_samples": 40},
+    {"size": 1000, "beyond_validated_depth_rate": 0.000000, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 2.367139, "sliced_mean_slippage_bps": 1.834153, "sliced_cheaper_rate": 0.650000, "sliced_samples": 40},
+    {"size": 10000, "beyond_validated_depth_rate": 0.000000, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 6.102269, "sliced_mean_slippage_bps": 3.811982, "sliced_cheaper_rate": 0.875000, "sliced_samples": 40},
+    {"size": 50000, "beyond_validated_depth_rate": 0.000000, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 13.770777, "sliced_mean_slippage_bps": 8.168554, "sliced_cheaper_rate": 0.950000, "sliced_samples": 40},
+    {"size": 200000, "beyond_validated_depth_rate": 0.942085, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 39.953913, "sliced_mean_slippage_bps": 20.973751, "sliced_cheaper_rate": 1.000000, "sliced_samples": 40},
+    {"size": 1000000, "beyond_validated_depth_rate": 0.996139, "exhausted_rate": 0.000000, "crossed_rate": 0.061776, "mean_slippage_bps": 261.315586, "sliced_mean_slippage_bps": 186.220316, "sliced_cheaper_rate": 1.000000, "sliced_samples": 40}
+  ]
+}

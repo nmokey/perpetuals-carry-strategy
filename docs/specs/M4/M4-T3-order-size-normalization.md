@@ -1,7 +1,9 @@
 # M4-T3 — Order size normalization
 
 **Milestone:** M4
-**Status:** Draft
+**Status:** **Complete 2026-08-30.** `python/perpcarry/ingestion/fetch_klines.py` and
+`python/perpcarry/models/order_size.py`; 8 + 14 tests, 4 mutations run and 4 caught. The criterion's
+cross-check **agrees exactly**, not within a tolerance — see below.
 **Depends on:** M4-T2; M1-T1/M1-T2 (archive URL construction, complete — `klines_daily_url` already
 exists and is reused here rather than restated)
 **Design doc:** Section 4.3, Section 5 (M4), Section 3.1
@@ -48,6 +50,35 @@ Expanded into checkable tests:
 | 9 | Sizes round to `step_size` from the committed `symbol_meta.json`, read via `derive_symbol_meta.load_table()` — never a literal | same |
 
 Test 4 is the criterion. Tests 2 and 3 exist so that when it fails, the failure has a name.
+
+**Measured 2026-08-30, and the strict criterion was available.** Volume summed from the `trades`
+corpus against Binance's published daily bar, `0GUSDT` on 2026-06-01, 2026-07-01 and 2026-07-15 —
+**identical to the last bit on all three**, across a 20x range in daily volume (15.1M / 19.9M /
+303.9M base units). So the test asserts exact equality rather than the epsilon Q2 reserved the right
+to choose. Same outcome as M2-T2: the strict criterion turned out to be available and is better.
+Do not loosen it to a tolerance without recording what differed and why.
+
+**And this is the first evidence that the trades ingest is *complete*.** Every other check in the
+project is internal — schema, `trade_id` contiguity, partition dates, row counts — and all of them
+pass on a corpus that is simply missing rows the venue had. Two independent aggregations of the same
+trades agreeing exactly is a different kind of statement.
+
+**What normalization bought immediately: the depth limit, in comparable units.** M4-T1 measured
+where fills start walking past the validated 25 levels, but only in base units, which say nothing
+about whether that size is large. Against June's ADV for the same symbol (21.9M units/day, the
+window matching the 2026-06-01 book probe):
+
+| order size | % of ADV | fills past level 25 |
+|---|---|---|
+| 50,000 | 0.23% | 0.0% |
+| 200,000 | 0.91% | 94.2% |
+| 1,000,000 | 4.57% | 99.6% |
+
+**The validated-depth boundary sits between roughly 0.25% and 0.9% of ADV** — and a capacity study
+sweeps from about 0.1% of ADV upward. So the small-order end of the curve rests on validated book
+state and most of the interesting range does not. That is a far more useful sentence than "the book
+is validated to 25 levels", and it exists only because sizes can now be expressed in units that
+compare.
 
 ## Design
 
@@ -101,19 +132,19 @@ and below level 25 that book is itself unvalidated (D-019). %depth on a large N 
 
 ## Open questions
 
-**Q1 — what window for ADV: 30 days, or the trailing month?**
+**Q1 — what window for ADV: 30 days, or the trailing month? Taken as recommended.**
 Recommendation: a caller-supplied trailing window defaulting to 30 days, computed strictly from days
 before the instant being normalized. The number matters less than that it is explicit and rolling;
 a fixed calendar month would make an order's %ADV jump discontinuously at month boundaries.
 
-**Q2 — what tolerance for the klines cross-check (test 4)?**
+**Q2 — what tolerance for the klines cross-check (test 4)? Taken: none — exact equality.**
 Recommendation: decide it from a first measurement rather than picking one now, and record the
 observed difference. The two aggregations may differ for documented reasons (bar boundary handling,
 inclusion of block trades), and a tolerance chosen before seeing the discrepancy is a tolerance
 chosen to pass. If they agree exactly, assert exactly — the M2-T2 experience is that the strict
 criterion is often available and always better.
 
-**Q3 — should `klines` become a validated corpus dataset with a `validate_data` check?**
+**Q3 — should `klines` become a validated corpus dataset with a `validate_data` check? Taken: not yet.**
 Recommendation: not yet. It is a cross-check input, not a study input, and adding it to the
 corpus-health gate would make a missing optional dataset fail the whole corpus. Revisit if M8 ends
 up using bar data for anything.

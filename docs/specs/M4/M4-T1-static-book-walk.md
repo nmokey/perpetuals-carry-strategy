@@ -91,7 +91,13 @@ units every fill is entirely within validated depth, and by 200,000 almost none 
 large-order end of the capacity curve rests on replayed state no independent source constrains,
 and the small-order end does not — which is a far more useful statement than "the book is validated
 to 25 levels", and it is only available because the flag is per-fill. M5-T1 should measure this
-properly across symbols rather than at one day's sampled instants; this was a throwaway probe.
+properly across symbols; this is one day's sampled instants.
+
+**Reproducible, as of 2026-08-30.** The measurement above came first from a throwaway program, which
+put unreproducible numbers into three documents. It is now `cpp/tools/impact_probe.cpp`, and the
+committed artifact is `docs/validation/M4-0GUSDT-2026-06-01.json` — "re-run to reproduce", matching
+the pattern M2-T2, M3-T2 and M3-T3 already follow. Every figure in the table above is regenerated
+by it.
 
 Crossed books were seen at **6.2%** of those instants, matching the 6.3% of updates measured
 independently in M2-T2 — so Q1's decision to flag rather than refuse is load-bearing, not

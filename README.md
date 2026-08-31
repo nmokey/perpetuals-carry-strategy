@@ -31,8 +31,18 @@ The pipeline is assembled end to end — Parquet → PyArrow → pybind11 → re
 → consumer. One real symbol-day replays in ~3.5s, reproducing the validated event count exactly,
 and the resulting book digest is identical across runs and across an 8192× change in queue capacity.
 
-**Next: M4**, the impact simulator — the first component that turns book state into a number the
-research claim depends on.
+**M4 is complete too.** The impact simulator walks the reconstructed book to price a hypothetical
+order, as a single market order or worked over a window in slices, and expresses the size in units
+that compare across symbols (% of average daily volume, % of visible depth).
+
+One result from it is worth stating up front, because it shapes how the eventual capacity answer
+must be read: **the vendor's reference data validates only the top 25 book levels, and orders above
+roughly 0.25–0.9% of ADV walk deeper than that.** So the small-order end of the capacity curve rests
+on independently validated book state and most of the interesting range does not. Every simulated
+fill reports whether it crossed that line, so the distinction survives into the results rather than
+living in a footnote.
+
+**Next: M5**, calibrating an impact model against simulated fills.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.

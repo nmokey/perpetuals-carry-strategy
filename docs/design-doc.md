@@ -531,19 +531,21 @@ perpcarry/
 │   │   ├── book_debug.hpp           # M2-T3: dump_csv / format_ladder / format_diff
 │   │   ├── spsc_queue.hpp           # M3-T2, header-only template
 │   │   ├── pipeline.hpp             # M3-T3: the one threaded thing in the core
-│   │   └── impact_simulator.hpp     # M4, not yet written
+│   │   └── impact_simulator.hpp     # M4-T1/T2: book walk + sliced execution
 │   ├── src/
 │   │   ├── order_book.cpp
 │   │   ├── book_replayer.cpp
 │   │   ├── book_compare.cpp
 │   │   ├── book_debug.cpp
 │   │   ├── pipeline.cpp
-│   │   └── impact_simulator.cpp     # M4, not yet written
+│   │   └── impact_simulator.cpp
 │   ├── bindings/
 │   │   └── pybind_module.cpp
 │   ├── tools/                       # local dev tools; file I/O lives here, not in the core (D-018)
+│   │   ├── event_csv.cpp            # shared reader for the exported events CSV
 │   │   ├── replay_validate.cpp      # M2-T2 harness: replay vs book_snapshot_25
-│   │   └── queue_bench.cpp          # M3-T2 throughput measurement
+│   │   ├── queue_bench.cpp          # M3-T2 throughput measurement
+│   │   └── impact_probe.cpp         # M4 size sweep over a replayed day
 │   ├── tests/                       # one file per component, Catch2
 │   └── CMakeLists.txt
 ├── python/
@@ -554,10 +556,12 @@ perpcarry/
 │       │   ├── fetch_funding.py
 │       │   ├── fetch_book.py
 │       │   ├── derive_symbol_meta.py
+│       │   ├── fetch_klines.py      # M4-T3: independent volume reference (D-022)
 │       │   └── validate_data.py
 │       ├── models/
-│       │   ├── impact_model.py
-│       │   └── funding_model.py
+│       │   ├── order_size.py        # M4-T3: %ADV and %depth
+│       │   ├── impact_model.py      # M5, not yet written
+│       │   └── funding_model.py     # M6, not yet written
 │       ├── strategy/
 │       │   ├── carry_strategy.py
 │       │   └── backtest.py

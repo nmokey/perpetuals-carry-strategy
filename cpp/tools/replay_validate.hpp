@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "event_csv.hpp"  // ValidationError, shared CSV reading
 #include "perpcarry/book_compare.hpp"
 #include "perpcarry/book_replayer.hpp"
 
@@ -104,11 +105,6 @@ struct ValidationOptions {
   // This is raw per-level book data. It may be read, and must not be committed or let into
   // CI from a real run (Tardis Clause 9.2(2)); the JSON summary is the publishable output.
   std::ostream* diagnostics = nullptr;
-};
-
-class ValidationError : public std::runtime_error {
- public:
-  explicit ValidationError(const std::string& what) : std::runtime_error(what) {}
 };
 
 // Streams both CSVs, replays, and compares. Neither file is held whole: a BTCUSDT day is

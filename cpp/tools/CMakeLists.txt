@@ -2,6 +2,7 @@
 # and the core does none (D-012). Built as a library plus a thin main so the harness itself
 # is testable in CI against synthetic input -- the real vendor data never can be.
 add_library(perpcarry_replay_validate STATIC
+  event_csv.cpp
   replay_validate.cpp
 )
 target_include_directories(perpcarry_replay_validate PUBLIC
@@ -22,3 +23,8 @@ add_executable(perpcarry_queue_bench queue_bench.cpp)
 target_link_libraries(perpcarry_queue_bench PRIVATE perpcarry_core)
 target_compile_definitions(perpcarry_queue_bench
   PRIVATE PERPCARRY_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
+
+# M4's real-data harness. Like the replay validator, it reads licensed vendor book data and emits
+# only aggregates -- rates and means over a day, which expose no rows.
+add_executable(perpcarry_impact_probe impact_probe.cpp)
+target_link_libraries(perpcarry_impact_probe PRIVATE perpcarry_replay_validate)

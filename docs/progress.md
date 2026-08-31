@@ -12,7 +12,7 @@ Milestone status at a glance:
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
-| M4 — Impact simulator (C++) | In progress — T1, T2 complete (2026-08-30); T3 specced |
+| M4 — Impact simulator (C++) | **Complete** (2026-08-30), T1–T3 |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
 | M7 — Strategy & backtest | Not started |
@@ -21,6 +21,83 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-30 — M4 made reproducible, and M4-T2 meets real data
+
+Answering "are we fully validated?" honestly: **M4 was not.** Three gaps, now closed.
+
+**The published M4 numbers could not be reproduced.** The depth and slippage figures had gone into
+three specs, the progress log and CLAUDE.md from a throwaway program that no longer existed. Every
+other milestone here ships an artifact that says "re-run to reproduce"; a number that cannot be is
+a claim about one afternoon. Now `cpp/tools/impact_probe.cpp` and
+`docs/validation/M4-0GUSDT-2026-06-01.json`. It regenerates every figure exactly — 94.2% and 99.6%
+past level 25, 1.50/2.37/6.10/13.77/39.95/261.32 bps, 6.2% crossed.
+
+**M4-T2 had never touched real data at all** — synthetic fixtures only, since vendor rows cannot
+reach CI. The probe now works each parent order over 10 s in 5 slices against taking it at once,
+40 sampled windows on `0GUSDT` 2026-06-01:
+
+| size | at once | worked over 10 s | slicing cheaper |
+|---|---|---|---|
+| 100 | 1.50 bps | 1.59 bps | 52.5% |
+| 1,000 | 2.37 | 1.83 | 65.0% |
+| 10,000 | 6.10 | 3.81 | 87.5% |
+| 50,000 | 13.77 | 8.17 | 95.0% |
+| 200,000 | 39.95 | 20.97 | **100%** |
+| 1,000,000 | 261.32 | 186.22 | **100%** |
+
+**The criterion's "slippage falls with duration" holds on real data for large orders and fails for
+small ones** — precisely the caveat M4-T2's spec wrote down before any of it was measured. At 100
+units slicing is *worse* on average and barely better than a coin flip per window: the order is too
+small for impact to dominate, so there is nothing to save by waiting. By 200,000 it is cheaper on
+every window sampled and roughly halves the cost.
+
+**A refactor the second tool forced.** `event_csv.{hpp,cpp}` now holds the exported-events reader
+that `replay_validate.cpp` had privately. A second copy of the exporter's column contract would
+have been a second source of truth agreeing only by luck, failing in the direction that looks like
+success — a file parsed into the wrong fields is still a plausible book (C15). Verified
+behaviour-preserving: the validator still reports 277,590 images matched exactly on the same day.
+
+Stale docs swept: the design doc's layout tree was missing `order_size.py`, `fetch_klines.py`,
+`impact_probe.cpp` and `event_csv.cpp`, and still described `impact_simulator` as unwritten; the
+README still said M4 was next.
+
+
+## 2026-08-30 — M4-T3: order size normalization, completing M4
+
+`ingestion/fetch_klines.py` (D-022's independent volume reference) and `models/order_size.py`
+(%ADV and %depth). 312 offline + 10 network Python tests, 85 C++, ruff clean. 4 mutations run, 4
+caught — including the look-ahead one, where the ADV window slips to include the day it is
+normalizing.
+
+**The criterion's cross-check agrees exactly, not within a tolerance.** D-022 declined to pick an
+epsilon in advance, on the grounds that one chosen before seeing the discrepancy is one chosen to
+pass. Measured: volume summed from the `trades` corpus against Binance's published daily bar, for
+`0GUSDT` on 2026-06-01, 2026-07-01 and 2026-07-15 — **identical to the last bit on all three**,
+across a 20x range in daily volume. The test asserts exact equality. Same outcome as M2-T2, where
+the strict criterion also turned out to be available.
+
+**This is the first evidence that the trades ingest is complete.** Every other check in this project
+is internal — schema, `trade_id` contiguity, partition dates — and every one of them passes on a
+corpus that is simply missing rows the venue had. Two independent aggregations of the same trades
+agreeing exactly is a different kind of claim.
+
+**What normalization bought immediately: M4-T1's depth limit, in units that compare.** The base-unit
+version said nothing about whether a size was large. Against June's ADV for the same symbol
+(21.9M units/day, matching the 2026-06-01 book probe):
+
+| order size | % of ADV | fills past level 25 |
+|---|---|---|
+| 50,000 | 0.23% | 0.0% |
+| 200,000 | 0.91% | 94.2% |
+| 1,000,000 | 4.57% | 99.6% |
+
+**The validated-depth boundary sits between roughly 0.25% and 0.9% of ADV**, and a capacity study
+sweeps from about 0.1% upward. So the small-order end of the curve rests on validated book state and
+most of the interesting range does not. That sentence is worth far more than "the book is validated
+to 25 levels", and it only became sayable once sizes could be normalized — which is the argument for
+M4-T3 existing at all.
+
 
 ## 2026-08-30 — M4-T2: time-sliced execution
 
