@@ -8,6 +8,7 @@ add_library(perpcarry_core STATIC
   src/book_compare.cpp
   src/book_debug.cpp
   src/book_replayer.cpp
+  src/impact_simulator.cpp
   src/order_book.cpp
   src/pipeline.cpp
   src/version.cpp

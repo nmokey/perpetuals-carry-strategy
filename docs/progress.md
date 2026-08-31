@@ -12,7 +12,7 @@ Milestone status at a glance:
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
-| M4 — Impact simulator (C++) | Specced (T1–T3, 2026-08-30); not started |
+| M4 — Impact simulator (C++) | In progress — T1 complete (2026-08-30); T2/T3 specced |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
 | M7 — Strategy & backtest | Not started |
@@ -21,6 +21,43 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-30 — M4-T1: static book-walk simulator
+
+`simulate_market_order(book, side, quantity)` in `perpcarry_core`. 72 C++ tests (was 60), 293
+Python, ruff clean. 8 mutations run, 8 caught — including the two that would have been wrong in the
+flattering direction: capping the walk at level 25, and filling an oversized order's remainder at
+the last price rather than reporting partial fill.
+
+**D-021's flag was measured, and it is a sharper instrument than expected.** Sweeping buy sizes at
+259 sampled instants on `0GUSDT` 2026-06-01:
+
+| size (base units) | walked past level 25 | mean slippage vs mid |
+|---|---|---|
+| 100 | 0.0% | 1.50 bps |
+| 10,000 | 0.0% | 6.10 bps |
+| 50,000 | 0.0% | 13.77 bps |
+| 200,000 | **94.2%** | 39.95 bps |
+| 1,000,000 | **99.6%** | 261.32 bps |
+
+The transition is sharp and sits inside the range a capacity study cares about. That converts a
+vague caveat — "the book is validated to 25 levels" — into a usable statement: the small-order end
+of the capacity curve rests on validated state and the large-order end does not, with the boundary
+locatable per symbol. Only available because the flag is per-fill rather than a note in a document.
+M5-T1 should measure it properly across symbols; this was a throwaway probe, not a committed tool.
+
+**Crossed books at 6.2% of sampled instants**, independently matching the 6.3% of updates measured
+in M2-T2. So M4-T1 Q1's decision to flag rather than refuse is load-bearing: refusing would silently
+discard one instant in sixteen, on a rule chosen before seeing whether those fills are anomalous.
+
+**One deviation from the spec as drafted.** `average_price` is NaN when nothing filled, not 0.0.
+The struct comment said 0 and the test table said "no average price rather than a zero"; the test
+won. A zero is a valid-looking price that would average into a calibration dataset without
+complaint, where a NaN propagates to whoever forgot to check `filled_quantity`.
+
+Bindings deliberately not added: M5-T1 is the first Python consumer, and M4-T2 will change the
+surface again.
+
 
 ## 2026-08-30 — M4 specced (T1–T3)
 

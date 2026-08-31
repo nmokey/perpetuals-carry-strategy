@@ -1,7 +1,12 @@
 # M4-T1 — Static book-walk simulator
 
 **Milestone:** M4
-**Status:** Draft
+**Status:** **Complete 2026-08-30.** `cpp/include/perpcarry/impact_simulator.hpp` +
+`cpp/src/impact_simulator.cpp`; 12 Catch2 cases, 8 mutations run and 8 caught. One deviation from
+this spec as drafted: `average_price` and `worst_price` are **NaN** when nothing filled, not 0.0 —
+the struct comment said 0, and test 6 said "no average price rather than a zero", which is the
+version that survived. A zero is a valid-looking price and would average into a calibration dataset
+without complaint. Bindings are deliberately not added yet; M5-T1 is the first Python consumer.
 **Depends on:** M2-T2 (complete 2026-08-29). No open design decision gates this task; OD-5 is
 resolved (**L2, D-017**) and constrains it hard — see below.
 **Design doc:** Section 4.3, Section 5 (M4)
@@ -68,6 +73,29 @@ M5's calibration and M9's capacity curve can split on it. Burying this would be 
 approximations" failure the north star ranks fourth among things that invalidate the work; hiding it
 behind an average price would make it invisible, because an average price from a deep walk looks
 exactly like one from a shallow walk.
+
+**Measured 2026-08-30, and the flag turns out to be exactly the right instrument.** Sweeping buy
+sizes at 259 sampled instants across `0GUSDT` 2026-06-01:
+
+| order size (base units) | walked past level 25 | book exhausted | mean slippage vs mid |
+|---|---|---|---|
+| 100 | 0.0% | 0.0% | 1.50 bps |
+| 1,000 | 0.0% | 0.0% | 2.37 bps |
+| 10,000 | 0.0% | 0.0% | 6.10 bps |
+| 50,000 | 0.0% | 0.0% | 13.77 bps |
+| 200,000 | **94.2%** | 0.0% | 39.95 bps |
+| 1,000,000 | **99.6%** | 0.0% | 261.32 bps |
+
+The transition is sharp and it sits inside the range a capacity study cares about: below ~50,000
+units every fill is entirely within validated depth, and by 200,000 almost none is. So the
+large-order end of the capacity curve rests on replayed state no independent source constrains,
+and the small-order end does not — which is a far more useful statement than "the book is validated
+to 25 levels", and it is only available because the flag is per-fill. M5-T1 should measure this
+properly across symbols rather than at one day's sampled instants; this was a throwaway probe.
+
+Crossed books were seen at **6.2%** of those instants, matching the 6.3% of updates measured
+independently in M2-T2 — so Q1's decision to flag rather than refuse is load-bearing, not
+theoretical. Refusing would silently discard one instant in sixteen.
 
 **Do not "solve" it with a depth cap.** Truncating the walk at level 25 would make large orders look
 *cheaper* than they are — the opposite of conservative — and would silently bound the capacity
