@@ -4,6 +4,7 @@
 #include <limits>
 #include <span>
 #include <stdexcept>
+#include <vector>
 #include <string>
 
 namespace perpcarry {
@@ -26,7 +27,13 @@ double slippage_bps(OrderSide side, double average_price, double reference) {
 
 }  // namespace
 
-Fill simulate_market_order(const OrderBook& book, OrderSide side, double quantity) {
+namespace {
+
+// The walk itself. `consumed` collects (price, remaining_quantity) for every level touched, so the
+// caller can apply the depletion *after* the walk -- mutating during it would invalidate the span
+// being iterated.
+Fill walk(const OrderBook& book, OrderSide side, double quantity,
+          std::vector<Level>* consumed) {
   if (!std::isfinite(quantity) || quantity <= 0.0) {
     throw std::invalid_argument("order quantity must be finite and positive, got " +
                                 std::to_string(quantity));
@@ -58,6 +65,7 @@ Fill simulate_market_order(const OrderBook& book, OrderSide side, double quantit
     fill.worst_price = level.price;
     ++fill.levels_consumed;
     remaining -= taken;
+    if (consumed != nullptr) consumed->push_back(Level{level.price, level.quantity - taken});
   }
 
   // Strictly greater: an order that exactly empties the side was filled, not starved.
@@ -74,6 +82,153 @@ Fill simulate_market_order(const OrderBook& book, OrderSide side, double quantit
   fill.slippage_vs_mid_bps = slippage_bps(side, fill.average_price, fill.mid_at_entry);
   fill.slippage_vs_touch_bps = slippage_bps(side, fill.average_price, fill.touch_at_entry);
   return fill;
+}
+
+}  // namespace
+
+Fill simulate_market_order(const OrderBook& book, OrderSide side, double quantity) {
+  return walk(book, side, quantity, nullptr);
+}
+
+Fill execute_market_order(OrderBook& book, OrderSide side, double quantity) {
+  std::vector<Level> consumed;
+  const Fill fill = walk(book, side, quantity, &consumed);
+  // Applied after the walk: a quantity of 0 removes the level, which is exactly OrderBook::apply's
+  // existing contract, so no new removal path is introduced here.
+  for (const Level& level : consumed) {
+    book.apply(consumed_side(side), level.price, level.quantity);
+  }
+  return fill;
+}
+
+namespace {
+
+// Child sizes from the schedule. The last slice takes whatever is left rather than its own
+// computed share: dividing by a weight sum loses or invents a sliver of the parent order, and a
+// capacity study that silently trades 0.9999 of what it claims is wrong in the flattering
+// direction.
+std::vector<double> slice_quantities(double total, const SliceSchedule& schedule) {
+  const std::size_t n = schedule.slices;
+  std::vector<double> weights = schedule.weights;
+  if (weights.empty()) weights.assign(n, 1.0);
+
+  double weight_sum = 0.0;
+  for (const double w : weights) weight_sum += w;
+
+  std::vector<double> sizes(n, 0.0);
+  double assigned = 0.0;
+  for (std::size_t i = 0; i + 1 < n; ++i) {
+    sizes[i] = total * weights[i] / weight_sum;
+    assigned += sizes[i];
+  }
+  sizes[n - 1] = total - assigned;
+  return sizes;
+}
+
+void validate_schedule(double total_quantity, const SliceSchedule& schedule) {
+  if (!std::isfinite(total_quantity) || total_quantity <= 0.0) {
+    throw std::invalid_argument("order quantity must be finite and positive, got " +
+                                std::to_string(total_quantity));
+  }
+  if (schedule.slices == 0) {
+    throw std::invalid_argument("a schedule must have at least one slice");
+  }
+  if (schedule.duration_ms < 0) {
+    throw std::invalid_argument("schedule duration must not be negative, got " +
+                                std::to_string(schedule.duration_ms));
+  }
+  if (schedule.weights.empty()) return;
+
+  if (schedule.weights.size() != schedule.slices) {
+    throw std::invalid_argument("schedule has " + std::to_string(schedule.slices) +
+                                " slices but " + std::to_string(schedule.weights.size()) +
+                                " weights");
+  }
+  double weight_sum = 0.0;
+  for (const double w : schedule.weights) {
+    if (!std::isfinite(w) || w < 0.0) {
+      throw std::invalid_argument("schedule weights must be finite and non-negative");
+    }
+    weight_sum += w;
+  }
+  if (weight_sum <= 0.0) {
+    throw std::invalid_argument("schedule weights must not sum to zero");
+  }
+}
+
+}  // namespace
+
+SlicedFill simulate_sliced_execution(std::span<const BookUpdate> updates, OrderSide side,
+                                     double total_quantity, const SliceSchedule& schedule) {
+  validate_schedule(total_quantity, schedule);
+
+  SlicedFill result;
+  result.parent.requested_quantity = total_quantity;
+  result.slices.reserve(schedule.slices);
+
+  const std::vector<double> sizes = slice_quantities(total_quantity, schedule);
+  BookReplayer replayer;
+  std::size_t cursor = 0;
+  const std::int64_t n = static_cast<std::int64_t>(schedule.slices);
+
+  for (std::size_t i = 0; i < schedule.slices; ++i) {
+    // Integer arithmetic on the grid: slice 0 lands exactly on `start_timestamp`, and with
+    // duration 0 every slice lands there, which is what makes a one-slice zero-duration schedule
+    // identical to a static walk.
+    const std::int64_t slice_time =
+        schedule.start_timestamp +
+        schedule.duration_ms * static_cast<std::int64_t>(i) / n;
+
+    // Everything at or before this instant, and nothing after it. This single line is the
+    // no-look-ahead guarantee.
+    while (cursor < updates.size() && updates[cursor].timestamp <= slice_time) {
+      replayer.apply(updates[cursor]);
+      ++cursor;
+    }
+
+    if (sizes[i] <= 0.0) continue;  // a zero weight is a legitimate "skip this slot"
+    // Consumes: the parent order's own footprint must persist between slices, or
+    // splitting it would make it cheaper for free (D-023).
+    const Fill fill = execute_market_order(replayer.mutable_book(), side, sizes[i]);
+    result.slices.push_back(fill);
+
+    if (fill.exhausted_book) ++result.slices_exhausted;
+    if (fill.beyond_validated_depth) ++result.slices_beyond_validated_depth;
+    if (fill.crossed_at_entry) ++result.slices_crossed;
+
+    result.parent.notional += fill.notional;
+    result.parent.filled_quantity += fill.filled_quantity;
+    result.parent.levels_consumed += fill.levels_consumed;
+
+    if (result.slices.size() == 1) {
+      // Arrival references, taken at the first slice that actually executes -- a leading zero
+      // weight is a skipped slot, not the start of the order.
+      result.parent.mid_at_entry = fill.mid_at_entry;
+      result.parent.touch_at_entry = fill.touch_at_entry;
+      result.parent.crossed_at_entry = fill.crossed_at_entry;
+      result.parent.worst_price = fill.worst_price;
+    } else if (std::isfinite(fill.worst_price)) {
+      const bool worse = side == OrderSide::Buy ? fill.worst_price > result.parent.worst_price
+                                                : fill.worst_price < result.parent.worst_price;
+      if (worse || !std::isfinite(result.parent.worst_price)) result.parent.worst_price = fill.worst_price;
+    }
+  }
+
+  result.parent.exhausted_book = result.slices_exhausted > 0;
+  result.parent.beyond_validated_depth = result.slices_beyond_validated_depth > 0;
+  result.completed = result.slices_exhausted == 0;
+
+  if (result.parent.filled_quantity > 0.0) {
+    result.parent.average_price = result.parent.notional / result.parent.filled_quantity;
+  } else {
+    result.parent.average_price = kNaN;
+    result.parent.worst_price = kNaN;
+  }
+  result.parent.slippage_vs_mid_bps =
+      slippage_bps(side, result.parent.average_price, result.parent.mid_at_entry);
+  result.parent.slippage_vs_touch_bps =
+      slippage_bps(side, result.parent.average_price, result.parent.touch_at_entry);
+  return result;
 }
 
 }  // namespace perpcarry

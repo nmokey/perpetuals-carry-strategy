@@ -17,7 +17,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
+#include <vector>
 
+#include "perpcarry/book_replayer.hpp"
 #include "perpcarry/order_book.hpp"
 
 namespace perpcarry {
@@ -78,6 +81,71 @@ struct Fill {
 // Throws std::invalid_argument for a non-finite or non-positive quantity. Filling nothing is a
 // result; being asked to fill nothing is a caller error.
 Fill simulate_market_order(const OrderBook& book, OrderSide side, double quantity);
+
+// The same walk, but it *consumes* what it took: levels fully eaten are removed and a partially
+// eaten level is reduced. Returns the identical Fill.
+//
+// This exists because splitting an order must not make it cheaper by relabelling. Four slices of
+// 5 units at one instant against a book that never depletes fill at the same average as one slice
+// of 5 -- so a 20-unit parent would cost less than a 20-unit single order for no reason but the
+// label. Consuming makes the two agree, which is both internally consistent and the conservative
+// direction.
+//
+// **The stated approximation (D-023).** A later vendor update at a touched price carries an
+// absolute quantity, so it overwrites whatever this left behind. Our hypothetical footprint
+// therefore decays as the real book refreshes -- a crude impact-decay model, but one taken from
+// the data rather than assumed, and the mechanism that makes spreading an order over time actually
+// cheaper in M4-T2.
+Fill execute_market_order(OrderBook& book, OrderSide side, double quantity);
+
+// ---------------------------------------------------------------------------------------------
+// M4-T2 -- time-sliced execution. See docs/specs/M4/M4-T2-sliced-execution.md.
+// ---------------------------------------------------------------------------------------------
+
+// A schedule, not a policy. TWAP and VWAP differ only in the weights, so the caller supplies them
+// and the volume-profile question -- which needs trades aligned to the book -- stays out of the
+// core and in M4-T3/M5 where the corpus lives.
+struct SliceSchedule {
+  std::int64_t start_timestamp = 0;  // ms, matching the book feed (D-013)
+  std::int64_t duration_ms = 0;      // 0 puts every slice at `start_timestamp`
+  std::size_t slices = 1;
+
+  // Empty means equal weights (TWAP). Otherwise one weight per slice; they are normalised, so
+  // relative magnitude is all that matters.
+  std::vector<double> weights;
+};
+
+struct SlicedFill {
+  // Aggregated over the children. Its reference prices are taken at the *first* slice, so
+  // `slippage_vs_mid_bps` is arrival-price shortfall: what the whole order cost against the market
+  // as it stood when execution began.
+  //
+  // `levels_consumed` is the sum across slices, not a maximum -- it is the total depth this parent
+  // order ate through, which is the quantity a cost attribution wants.
+  Fill parent;
+
+  std::vector<Fill> slices;  // in execution order, so a parent fill can be attributed
+
+  std::size_t slices_exhausted = 0;
+  std::size_t slices_beyond_validated_depth = 0;
+  std::size_t slices_crossed = 0;
+
+  bool completed = false;  // every slice filled its full requested size
+};
+
+// Replays `updates` and executes `total_quantity` across the schedule, advancing the book between
+// slices. `updates` must begin with a snapshot block, as BookReplayer requires.
+//
+// **No look-ahead, structurally.** The replayer is advanced only to each slice's timestamp before
+// that slice is simulated, so updates after it have not been applied and cannot influence the fill.
+// This is the most natural place in the whole project for look-ahead to enter -- one loop written
+// in the wrong order and every slice fills against a book that already knows what happens next --
+// which is why the containment is here rather than at each call site.
+//
+// Throws std::invalid_argument for a non-positive quantity, zero slices, a negative duration, or a
+// weight vector that is the wrong length, non-finite, negative, or sums to zero.
+SlicedFill simulate_sliced_execution(std::span<const BookUpdate> updates, OrderSide side,
+                                     double total_quantity, const SliceSchedule& schedule);
 
 }  // namespace perpcarry
 

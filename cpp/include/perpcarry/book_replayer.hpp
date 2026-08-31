@@ -62,6 +62,12 @@ class BookReplayer {
   std::size_t apply_batch(std::span<const BookUpdate> batch);
 
   const OrderBook& book() const { return book_; }
+
+  // Mutable access, for an execution simulator that must consume the liquidity it took (M4-T2,
+  // D-023). Deliberately narrow in intent rather than in signature: nothing stops a caller
+  // corrupting replay state with it, and nothing but this should use it. The replay's own
+  // statistics are unaffected -- they count rows applied, not levels present.
+  OrderBook& mutable_book() { return book_; }
   const Stats& stats() const { return stats_; }
 
  private:

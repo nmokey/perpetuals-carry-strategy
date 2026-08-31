@@ -261,3 +261,333 @@ TEST_CASE("simulating is deterministic and does not consume the book", "[impact]
   REQUIRE(book.level_count(Side::Ask) == 3);
   REQUIRE(book.best_ask()->quantity == 4.0);
 }
+
+// ------------------------------------------------------------------------------------------
+// M4-T2 -- time-sliced execution.
+// Spec: docs/specs/M4/M4-T2-sliced-execution.md.
+// ------------------------------------------------------------------------------------------
+
+namespace {
+
+using perpcarry::BookUpdate;
+using perpcarry::SlicedFill;
+using perpcarry::SliceSchedule;
+using perpcarry::simulate_sliced_execution;
+
+BookUpdate snap(std::int64_t ts, Side side, double price, double qty) {
+  return BookUpdate{ts, ts, true, side, price, qty};
+}
+BookUpdate diff(std::int64_t ts, Side side, double price, double qty) {
+  return BookUpdate{ts, ts, false, side, price, qty};
+}
+
+// An opening book at t=1000, then fresh ask liquidity arriving at 1100, 1200 and 1300. Each
+// refill restores the top of the book, so a schedule spread over the window meets liquidity a
+// single immediate order never sees -- which is what makes "slippage falls with duration" true
+// here by construction.
+std::vector<BookUpdate> replenishing_stream() {
+  std::vector<BookUpdate> updates = {
+      snap(1000, Side::Bid, 99.0, 100.0),
+      snap(1000, Side::Ask, 100.0, 5.0),
+      snap(1000, Side::Ask, 101.0, 5.0),
+      snap(1000, Side::Ask, 102.0, 5.0),
+      snap(1000, Side::Ask, 110.0, 1000.0),  // a deep, expensive backstop
+  };
+  for (std::int64_t t : {1100, 1200, 1300}) {
+    updates.push_back(diff(t, Side::Ask, 100.0, 5.0));
+    updates.push_back(diff(t, Side::Ask, 101.0, 5.0));
+    updates.push_back(diff(t, Side::Ask, 102.0, 5.0));
+  }
+  return updates;
+}
+
+}  // namespace
+
+TEST_CASE("one slice over zero duration equals a static walk", "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 0;
+  schedule.slices = 1;
+
+  const SlicedFill sliced = simulate_sliced_execution(updates, OrderSide::Buy, 7.0, schedule);
+
+  OrderBook book;
+  book.apply(Side::Bid, 99.0, 100.0);
+  book.apply(Side::Ask, 100.0, 5.0);
+  book.apply(Side::Ask, 101.0, 5.0);
+  book.apply(Side::Ask, 102.0, 5.0);
+  book.apply(Side::Ask, 110.0, 1000.0);
+  const Fill direct = simulate_market_order(book, OrderSide::Buy, 7.0);
+
+  REQUIRE(sliced.parent.notional == direct.notional);
+  REQUIRE(sliced.parent.average_price == direct.average_price);
+  REQUIRE(sliced.parent.filled_quantity == direct.filled_quantity);
+  REQUIRE(sliced.parent.levels_consumed == direct.levels_consumed);
+  REQUIRE(sliced.parent.slippage_vs_mid_bps == direct.slippage_vs_mid_bps);
+}
+
+TEST_CASE("slippage does not fall as size grows, at a fixed window", "[impact][sliced]") {
+  // The criterion's first half.
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 300;
+  schedule.slices = 4;
+
+  double previous = -1e18;
+  for (const double size : {1.0, 5.0, 10.0, 20.0, 40.0, 60.0}) {
+    const SlicedFill fill = simulate_sliced_execution(updates, OrderSide::Buy, size, schedule);
+    REQUIRE(fill.parent.slippage_vs_mid_bps >= previous);
+    previous = fill.parent.slippage_vs_mid_bps;
+  }
+}
+
+TEST_CASE("slippage does not rise as the window lengthens, at a fixed size",
+          "[impact][sliced]") {
+  // The criterion's second half -- and it holds only because this book replenishes. On a real
+  // trending window it may not, and that would be a finding rather than a defect (see spec).
+  const std::vector<BookUpdate> updates = replenishing_stream();
+
+  double previous = 1e18;
+  for (const std::int64_t duration : {0, 100, 200, 300}) {
+    SliceSchedule schedule;
+    schedule.start_timestamp = 1000;
+    schedule.duration_ms = duration;
+    schedule.slices = 4;
+    const SlicedFill fill = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, schedule);
+    REQUIRE(fill.parent.slippage_vs_mid_bps <= previous);
+    previous = fill.parent.slippage_vs_mid_bps;
+  }
+}
+
+TEST_CASE("the book really evolves between slices", "[impact][sliced]") {
+  // Distinguishes a simulator that advances the replayer from one that replays against a frozen
+  // opening snapshot. Same schedule, same size; only the passage of time differs.
+  const std::vector<BookUpdate> updates = replenishing_stream();
+
+  SliceSchedule spread;
+  spread.start_timestamp = 1000;
+  spread.duration_ms = 300;
+  spread.slices = 4;
+
+  SliceSchedule frozen = spread;
+  frozen.duration_ms = 0;  // all four slices against the opening book
+
+  const SlicedFill a = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, spread);
+  const SlicedFill b = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, frozen);
+
+  REQUIRE(a.parent.average_price < b.parent.average_price);
+}
+
+TEST_CASE("a slice cannot see updates that arrive after it", "[impact][sliced]") {
+  // The invariant that most badly destroys this work if it breaks: look-ahead leakage, ranked
+  // first in the north star. A time-sliced simulator over a replayed stream is the most natural
+  // place in the project for it to enter.
+  std::vector<BookUpdate> updates = replenishing_stream();
+
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 0;
+  schedule.slices = 1;
+
+  const SlicedFill with_future = simulate_sliced_execution(updates, OrderSide::Buy, 12.0, schedule);
+
+  // The same input truncated to what existed at the slice's instant.
+  std::vector<BookUpdate> past_only;
+  for (const BookUpdate& u : updates) {
+    if (u.timestamp <= 1000) past_only.push_back(u);
+  }
+  const SlicedFill without_future =
+      simulate_sliced_execution(past_only, OrderSide::Buy, 12.0, schedule);
+
+  REQUIRE(with_future.parent.notional == without_future.parent.notional);
+  REQUIRE(with_future.parent.average_price == without_future.parent.average_price);
+  REQUIRE(with_future.parent.levels_consumed == without_future.parent.levels_consumed);
+}
+
+TEST_CASE("slice sizes sum to the parent exactly", "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 300;
+  schedule.slices = 4;
+
+  // These particular weights are not decorative. Under the naive rule -- every slice takes its own
+  // computed share -- 7.0 split as 2:5:0.5:1 sums to 6.999999999999999, one ULP short. Under
+  // equal weights, and at most round totals, the naive rule happens to sum exactly, so a fixture
+  // built from tidy numbers cannot tell the two rules apart (C16). Searched for a divergent case
+  // rather than assuming one existed.
+  schedule.weights = {2.0, 5.0, 0.5, 1.0};
+  const double total = 7.0;
+  const SlicedFill fill = simulate_sliced_execution(updates, OrderSide::Buy, total, schedule);
+
+  double requested = 0.0;
+  for (const Fill& slice : fill.slices) requested += slice.requested_quantity;
+  REQUIRE(requested == total);
+  REQUIRE(fill.parent.filled_quantity == total);
+  REQUIRE(fill.completed);
+}
+
+TEST_CASE("an exhausted slice is reported and the parent is not completed",
+          "[impact][sliced]") {
+  std::vector<BookUpdate> updates = {
+      snap(1000, Side::Bid, 99.0, 5.0),
+      snap(1000, Side::Ask, 100.0, 3.0),
+  };
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 100;
+  schedule.slices = 2;
+
+  const SlicedFill fill = simulate_sliced_execution(updates, OrderSide::Buy, 10.0, schedule);
+
+  REQUIRE(fill.slices_exhausted > 0);
+  REQUIRE_FALSE(fill.completed);
+  REQUIRE(fill.parent.exhausted_book);
+  REQUIRE(fill.parent.filled_quantity < fill.parent.requested_quantity);
+  // The average must describe the fill that happened, not the order that was asked for.
+  REQUIRE(fill.parent.average_price == 100.0);
+}
+
+TEST_CASE("per-slice results are retained for attribution", "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 300;
+  schedule.slices = 4;
+
+  const SlicedFill fill = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, schedule);
+
+  REQUIRE(fill.slices.size() == 4);
+  double notional = 0.0;
+  std::size_t levels = 0;
+  for (const Fill& slice : fill.slices) {
+    notional += slice.notional;
+    levels += slice.levels_consumed;
+  }
+  REQUIRE_THAT(fill.parent.notional, WithinRel(notional, 1e-15));
+  REQUIRE(fill.parent.levels_consumed == levels);
+}
+
+TEST_CASE("equal weights reproduce TWAP, and a weight vector is honoured",
+          "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule twap;
+  twap.start_timestamp = 1000;
+  twap.duration_ms = 300;
+  twap.slices = 4;
+
+  SliceSchedule explicit_equal = twap;
+  explicit_equal.weights = {1.0, 1.0, 1.0, 1.0};
+
+  const SlicedFill a = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, twap);
+  const SlicedFill b = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, explicit_equal);
+  REQUIRE(a.parent.average_price == b.parent.average_price);
+
+  SliceSchedule front_loaded = twap;
+  front_loaded.weights = {7.0, 1.0, 1.0, 1.0};
+  const SlicedFill c = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, front_loaded);
+
+  REQUIRE(c.slices.front().requested_quantity > a.slices.front().requested_quantity);
+  // Front-loading into a replenishing book concentrates the order where liquidity is thinnest.
+  REQUIRE(c.parent.average_price > a.parent.average_price);
+}
+
+TEST_CASE("sliced execution is deterministic and independent of batching",
+          "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 300;
+  schedule.slices = 4;
+
+  const SlicedFill first = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, schedule);
+  const SlicedFill second = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, schedule);
+
+  REQUIRE(first.parent.notional == second.parent.notional);
+  REQUIRE(first.parent.average_price == second.parent.average_price);
+  REQUIRE(first.slices.size() == second.slices.size());
+}
+
+TEST_CASE("an invalid schedule is rejected", "[impact][sliced]") {
+  const std::vector<BookUpdate> updates = replenishing_stream();
+  SliceSchedule schedule;
+  schedule.start_timestamp = 1000;
+  schedule.duration_ms = 300;
+  schedule.slices = 4;
+
+  SECTION("zero slices") {
+    SliceSchedule bad = schedule;
+    bad.slices = 0;
+    REQUIRE_THROWS_AS(simulate_sliced_execution(updates, OrderSide::Buy, 10.0, bad),
+                      std::invalid_argument);
+  }
+  SECTION("negative duration") {
+    SliceSchedule bad = schedule;
+    bad.duration_ms = -1;
+    REQUIRE_THROWS_AS(simulate_sliced_execution(updates, OrderSide::Buy, 10.0, bad),
+                      std::invalid_argument);
+  }
+  SECTION("wrong number of weights") {
+    SliceSchedule bad = schedule;
+    bad.weights = {1.0, 1.0};
+    REQUIRE_THROWS_AS(simulate_sliced_execution(updates, OrderSide::Buy, 10.0, bad),
+                      std::invalid_argument);
+  }
+  SECTION("weights summing to zero") {
+    SliceSchedule bad = schedule;
+    bad.weights = {0.0, 0.0, 0.0, 0.0};
+    REQUIRE_THROWS_AS(simulate_sliced_execution(updates, OrderSide::Buy, 10.0, bad),
+                      std::invalid_argument);
+  }
+  SECTION("a non-positive parent quantity") {
+    REQUIRE_THROWS_AS(simulate_sliced_execution(updates, OrderSide::Buy, 0.0, schedule),
+                      std::invalid_argument);
+  }
+}
+
+TEST_CASE("splitting an order at one instant does not make it cheaper", "[impact][sliced]") {
+    // The invariant that forced D-023. Four slices of 5 units at the same timestamp are the same
+    // 20 units taken from the same book; if the slices did not consume what they took, each would
+    // see undepleted liquidity and the parent would fill better than a single 20-unit order --
+    // free money from relabelling.
+  const std::vector<BookUpdate> updates = replenishing_stream();
+
+  SliceSchedule split;
+  split.start_timestamp = 1000;
+  split.duration_ms = 0;
+  split.slices = 4;
+
+  SliceSchedule single = split;
+  single.slices = 1;
+
+  const SlicedFill a = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, split);
+  const SlicedFill b = simulate_sliced_execution(updates, OrderSide::Buy, 20.0, single);
+
+  REQUIRE_THAT(a.parent.notional, WithinRel(b.parent.notional, 1e-12));
+  REQUIRE_THAT(a.parent.average_price, WithinRel(b.parent.average_price, 1e-12));
+  REQUIRE(a.parent.filled_quantity == b.parent.filled_quantity);
+}
+
+TEST_CASE("simulate does not consume the book; execute does", "[impact]") {
+  // M4-T1's contract is that simulating is read-only, because M5 sweeps many sizes against one
+  // instant. M4-T2 needs the opposite. Both are pinned here so neither can quietly become the
+  // other.
+  OrderBook book = sample_book();
+  const double before = book.best_ask()->quantity;
+
+  simulate_market_order(book, OrderSide::Buy, 2.0);
+  REQUIRE(book.best_ask()->quantity == before);
+  REQUIRE(book.level_count(Side::Ask) == 3);
+
+  const Fill executed = perpcarry::execute_market_order(book, OrderSide::Buy, 2.0);
+  REQUIRE(executed.filled_quantity == 2.0);
+  REQUIRE(book.best_ask()->quantity == before - 2.0);
+  REQUIRE(book.level_count(Side::Ask) == 3);
+
+  // Eating a whole level removes it rather than leaving a zero-quantity ghost.
+  perpcarry::execute_market_order(book, OrderSide::Buy, before - 2.0);
+  REQUIRE(book.level_count(Side::Ask) == 2);
+  REQUIRE(book.best_ask()->price == 101.0);
+}

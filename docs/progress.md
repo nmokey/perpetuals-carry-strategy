@@ -12,7 +12,7 @@ Milestone status at a glance:
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
-| M4 — Impact simulator (C++) | In progress — T1 complete (2026-08-30); T2/T3 specced |
+| M4 — Impact simulator (C++) | In progress — T1, T2 complete (2026-08-30); T3 specced |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
 | M7 — Strategy & backtest | Not started |
@@ -21,6 +21,39 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-30 — M4-T2: time-sliced execution
+
+`simulate_sliced_execution(updates, side, quantity, schedule)`. 85 C++ tests (was 72), 293 Python,
+ruff clean. Takes a *schedule*, not a policy: TWAP and VWAP differ only in the weights, so the
+caller supplies them and the volume-profile question stays out of the core.
+
+**D-023, forced by a test written for something else.** The draft had each slice call M4-T1's
+read-only `simulate_market_order`. Test 4 then failed and exposed why: with a frozen book, four
+slices of 5 units each saw *undepleted* liquidity and filled at the same average as one slice of 5,
+so a 20-unit parent came out cheaper than a single 20-unit order — free money from relabelling, and
+unbounded in the number of slices. Exactly the error a capacity study must not make.
+
+Slices now consume. `execute_market_order` does the same walk and depletes what it took;
+`simulate_market_order` stays const, because M5 still sweeps many sizes against one instant. Both
+behaviours are pinned by a test so neither can quietly become the other.
+
+The approximation is stated rather than hidden: a later vendor update at a touched price carries an
+*absolute* quantity, so it overwrites the footprint and our impact decays as the real book refreshes.
+Crude — the data describes a world where we did not trade — but decay taken from the data rather
+than assumed, and it is what makes "spreading an order over time is cheaper" a measured effect here
+instead of a construction.
+
+**Four mutations, four caught — after one survived, and the reason was C16 again.** Losing the
+remainder on the last slice passed, because the fixture used 10.0 split three ways, where the naive
+per-slice share happens to sum exactly in IEEE double. Rather than assume a divergent case existed,
+I searched for one: 7.0 split as 2:5:0.5:1 sums to 6.999999999999999, one ULP short. With that
+fixture the mutation dies. Second time this session that a test stood exactly where two rules agree.
+
+The look-ahead mutation — applying every update before the first slice — is caught by two tests.
+That is the invariant ranked first in the north star, and a time-sliced simulator over a replayed
+stream is the most natural place in the project for it to enter.
+
 
 ## 2026-08-30 — M4-T1: static book-walk simulator
 

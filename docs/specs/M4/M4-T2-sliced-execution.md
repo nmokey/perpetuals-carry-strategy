@@ -1,7 +1,11 @@
 # M4-T2 — Time-sliced TWAP/VWAP simulator
 
 **Milestone:** M4
-**Status:** Draft
+**Status:** **Complete 2026-08-30.** `simulate_sliced_execution` in
+`cpp/include/perpcarry/impact_simulator.hpp`; 13 Catch2 cases, 4 mutations run and 4 caught after
+one survived. One decision this spec did not anticipate and had to make: **slices consume the
+liquidity they take (D-023)**, which required `execute_market_order` and a `mutable_book()` on
+`BookReplayer`. Two tests added beyond the ten below.
 **Depends on:** M4-T1; M3-T2 (complete 2026-08-29 — the edge the watch list called over-tight is now
 simply satisfied)
 **Design doc:** Section 4.3, Section 5 (M4)
@@ -49,6 +53,25 @@ the things that invalidate this work, and a time-sliced simulator over a replaye
 natural place in the whole project for it to enter — one loop written in the wrong order and every
 slice fills against a book that already knows what happened next. It is cheap to test and
 catastrophic to miss.
+
+## What this spec got wrong, found by a test written for something else
+
+The draft had each slice call M4-T1's `simulate_market_order`, which is read-only. Test 4 ("the book
+really evolves between slices") then failed in a way that exposed the real problem: with a frozen
+book, four slices of 5 units each saw *undepleted* liquidity and filled at the same average as one
+slice of 5. A 20-unit parent order came out cheaper than a single 20-unit order, purely from being
+labelled as four.
+
+Fixed by **D-023**: slices consume. `execute_market_order` does the same walk and then depletes what
+it took; `simulate_market_order` stays const, because M5 still needs to sweep many sizes against one
+instant. A test pins both behaviours so neither can quietly become the other, and a second test pins
+the invariant that motivated the change — splitting an order at one instant must not make it cheaper.
+
+The approximation this introduces is stated in D-023 and belongs in the M9 caveats: a later vendor
+update at a touched price carries an absolute quantity and overwrites the footprint, so our impact
+decays as the real book refreshes. Crude, but taken from the data rather than assumed — and it is
+what makes "spreading an order over time is cheaper" a measured effect here rather than a
+construction.
 
 ## Design
 

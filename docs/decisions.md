@@ -562,3 +562,33 @@ this project that could notice.
 difference recorded, because a tolerance picked before seeing the discrepancy is a tolerance picked
 to pass. If the two agree exactly, assert exactly — M2-T2's experience is that the strict criterion
 is more often available than expected.
+
+---
+
+## D-023 — a sliced order consumes the liquidity it takes (2026-08-30)
+
+**Context.** M4-T1's `simulate_market_order` is read-only by design: M5 sweeps many sizes against a
+single instant, so simulating must not consume the book. M4-T2 then executed each slice through it,
+and a test written for something else caught the consequence — four slices of 5 units at one
+timestamp each saw an undepleted book and filled at the same average as one slice of 5. A 20-unit
+parent was therefore *cheaper* than a single 20-unit order. Free money from relabelling.
+
+**Decision.** Slices consume. `execute_market_order(OrderBook&, ...)` performs the same walk and
+then depletes what it took — full levels removed, a partial level reduced. `simulate_market_order`
+stays const and unchanged. A test pins both, so neither can quietly become the other.
+
+**Why this is the conservative direction.** Not consuming makes large orders look cheaper the more
+finely they are sliced, without bound, which is exactly the error a capacity study must not make.
+Consuming makes a split order cost the same as an unsplit one at the same instant, which is the only
+self-consistent answer.
+
+**The approximation, stated.** A later vendor update at a touched price carries an *absolute*
+quantity (§3.2), so it overwrites whatever the footprint left behind. Our hypothetical order's
+impact therefore decays as the real book refreshes. This is crude — the historical data describes a
+world in which we did not trade — but it is decay taken from the data rather than assumed, and it is
+the mechanism that makes spreading an order over time genuinely cheaper in M4-T2 rather than
+cheaper by construction. It belongs in the M9 caveats with the other stated approximations.
+
+**Cost.** `BookReplayer` gained a `mutable_book()` accessor, narrow in intent and not in signature:
+nothing stops a caller corrupting replay state with it, and nothing but the sliced simulator should
+use it. The replay statistics are unaffected — they count rows applied, not levels present.
