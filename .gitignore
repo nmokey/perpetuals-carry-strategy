@@ -28,3 +28,6 @@ __pycache__/
 
 # CI-style FetchContent cache location (see .github/workflows/ci.yml)
 /.fetchcontent/
+
+# Local scratch notes, not part of the project record
+/docs/grill-me.md

@@ -12,7 +12,7 @@ Milestone status at a glance:
 | M1 — Data acquisition | **Complete** (2026-08-20), T1–T5 |
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
-| M4 — Impact simulator (C++) | Not started |
+| M4 — Impact simulator (C++) | Specced (T1–T3, 2026-08-30); not started |
 | M5 — Impact model calibration | Not started |
 | M6 — Funding persistence model | Not started |
 | M7 — Strategy & backtest | Not started |
@@ -21,6 +21,47 @@ Milestone status at a glance:
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-08-30 — M4 specced (T1–T3)
+
+All three in `docs/specs/M4/`. No open design decision gates M4; OD-5 (L2, D-017) constrains it
+hard and is already resolved. Two decisions logged that the design doc did not specify.
+
+**D-021 — the depth problem is disclosed per fill, not capped.** The book is validated 25 levels
+deep and M4-T1 walks deeper, for exactly the large orders the capacity answer is about. Every fill
+now reports `levels_consumed` and `beyond_validated_depth`, so the approximation travels with the
+number into M5's dataset and M9's curve rather than being described once in a document. Capping the
+walk at level 25 was rejected explicitly: it makes large orders look *cheaper* than they are — the
+error runs in the flattering direction — and bounds the capacity answer by an artifact of the
+reference dataset while looking like caution.
+
+**D-022 — ADV is computed from trades and cross-checked against klines.** M4-T3's criterion said
+"tested against known ADV figures" and no known figures existed; the venue API is geo-blocked, so
+the only ADV available was one derived from our own corpus, and testing that against itself is the
+trap M1-T4 shipped and M3-T3 nearly repeated. `data.binance.vision` publishes daily klines whose
+`volume` is the venue's own aggregation of the same trades, and `klines_daily_url` already exists
+from M1-T1. Worth noting what this check would catch that nothing else can: a trades ingest that
+silently dropped rows. Every existing check is internal, and all of them pass on a corpus that is
+merely missing data.
+
+**Three things the specs say that the design doc's criteria do not:**
+
+1. M4-T1's criterion ("unit tests against hand-computed book-walk examples") is necessary and
+   nowhere near sufficient. Hand-computed cases check arithmetic on books someone chose; they say
+   nothing about the shapes a real day produces. Measured: **82,356 of 1,299,113 updates on
+   `0GUSDT` 2026-06-01 leave the book crossed** — 6.3%, so a simulator sampling at random lands
+   there constantly. Walk it, flag it, let M5 decide; a mid that sits outside the spread is not
+   something to regress on silently.
+2. M4-T2's criterion says slippage *decreases* with longer duration. That is only true if the book
+   replenishes, which a synthetic test book does by construction and a real trending window may not.
+   Written down now so nobody later "fixes" the simulator until real data reproduces a synthetic
+   property.
+3. `OrderSide::Buy` is a distinct type from `Side::Bid`. A buy consumes the *ask* side, and reusing
+   one enum for both is how a sign error gets written that reads correctly.
+
+M4-T3 is Python rather than C++, deviating from the milestone heading: normalization needs symbol
+identity and committed metadata, and `perpcarry_core` has deliberately avoided data dependencies.
+
 
 ## 2026-08-30 — closing the three gaps the pre-push audit left open
 

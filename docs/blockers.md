@@ -97,6 +97,14 @@ Not blocking yet; will bite at the milestone named.
   duplicate levels, quantity sanity) which is weaker but not nothing. Decide when M4-T1 is
   specced, not at write-up time.
 
+  **Decided 2026-08-30 when M4-T1 was specced (D-021):** the first option, but made per-fill rather
+  than left to the writeup. Every simulated fill reports `levels_consumed` and
+  `beyond_validated_depth`, so the approximation travels with the number into M5's dataset and M9's
+  capacity curve instead of being described once. Capping the walk at level 25 was rejected: it
+  makes large orders look *cheaper* than they are and bounds the capacity answer by an artifact of
+  the reference data. The underlying gap is unchanged and stays on this list — this disclosed it,
+  it did not close it.
+
 - **M2-T2's real-data validation can never run in CI, in either tier.** The Tardis licence forbids
   book data reaching CI (M1-T3 Licence section, Clause 9.2(2)), so the comparison against
   `book_snapshot_25` — which is the *entire* correctness argument for the book, since §3.2 has no

@@ -507,3 +507,58 @@ one is that it makes the backtest low-latency. The writeup says the former.
 renderers stay single-threaded and lock-free by virtue of being untouched by threads. The queue is
 new surface, not a modification of existing surface — which is why this decision costs nothing to
 have deferred until now.
+
+---
+
+## D-021 — M4 reports how deep a walk went; it does not cap at the validated depth (2026-08-30)
+
+**Context.** The replay is validated against `book_snapshot_25`, so only the top 25 levels of a
+~1000-level book are constrained by any independent reference (D-019). M4-T1's book walk goes
+deeper than that for exactly the large orders the capacity answer is about. There is no deeper
+reference on the free tier, so this cannot be fixed by getting better data.
+
+**Decision.** Walk the full book, and report `levels_consumed` and `beyond_validated_depth` on every
+fill. Do not truncate the walk at level 25.
+
+**Why capping would be worse than the problem.** Truncating makes a large order look *cheaper* than
+it is — it stops paying for depth precisely where depth gets expensive — so the error runs in the
+flattering direction. Worse, it would bound the capacity answer by an artifact of the reference
+dataset rather than by the market, while looking like caution.
+
+**Why a flag rather than a caveat in the writeup.** An average price from a deep walk is
+indistinguishable from one from a shallow walk. Recorded per fill, the approximation survives into
+M5's calibration dataset and M9's capacity curve, where the large-order end can be split out and
+shown for what it is. Stated once in a document, it would be invisible next to the number.
+
+**What this does not claim.** The deep book is not validated by this. It is *disclosed*. The
+residual risk stays on the watch list, and the honest framing for M9 is that the large-order end of
+the capacity curve rests on replayed state no independent source constrains.
+
+---
+
+## D-022 — ADV is computed from the trades corpus and cross-checked against Binance klines (2026-08-30)
+
+**Context.** M4-T3's criterion is "unit tested against known ADV figures", and no known figures
+exist: the venue API is geo-blocked (B-004), so the only ADV available is one derived from our own
+`trades` corpus. Testing that against itself is the failure mode M1-T4 shipped and M3-T3's
+"checkpoint" nearly repeated — two copies of one assumption, agreeing by construction.
+
+**Decision.** ADV is computed from the `trades` corpus, and validated against the **daily klines**
+published on `data.binance.vision`, whose `volume` column is the venue's own aggregation of the same
+trades. A minimal `fetch_klines.py` joins the ingestion package; `binance_archive.klines_daily_url`
+already exists from M1-T1 and is reused rather than restated.
+
+**Why not use klines as the source.** M5 and M7 consume the `trades` corpus, so the ADV that feeds
+calibration has to come from those same rows — otherwise the study is calibrated against one dataset
+and executed against another. Klines check the computation; they do not replace it. Same reasoning
+as D-018: validate the thing you actually use.
+
+**What the check would catch that nothing else does.** A trades ingest that silently dropped rows.
+Every existing check is internal — schema, contiguity, partition dates — and all of them pass on a
+corpus that is simply missing data the venue had. An independent volume total is the first thing in
+this project that could notice.
+
+**Tolerance is deliberately not chosen here.** It gets set from a first measurement and the observed
+difference recorded, because a tolerance picked before seeing the discrepancy is a tolerance picked
+to pass. If the two agree exactly, assert exactly — M2-T2's experience is that the strict criterion
+is more often available than expected.
