@@ -37,6 +37,26 @@ question, not a technical workaround.
 
 ## Watch list
 
+**2026-10-08 audit correction — supersedes the corpus and costing claims below.** The current
+checkout has no data corpus available to verify. Earlier session reports describe 11 `0GUSDT`
+book days from October 2025 through August 2026, and trades for September 2025 and June–July 2026.
+October's ingestion stopped at the trade-ID guard; a reported October 10 volume shortfall of
+approximately 4.4% remains unresolved. Verify partitions and reconciliation on the data host
+before resuming ingestion or claiming usable calibration days.
+
+`0GUSDT` listed in September 2025; the earlier projection of 24 available book days and a full
+24-month corpus is invalid. BTC/ETH totals below are extrapolations, not measured corpus totals,
+and the stated ±50% is not a measured confidence interval. Re-measure the chosen server's disk
+and representative busy days, including archive cache and temporary output, before a bulk pull.
+
+A calibration day needs complete, quality-checked volume history strictly before that day;
+same-day book/trades overlap alone is insufficient. June 1 lacked prior trades in the original
+corpus. October 1 cannot have a full 30-day window for a symbol listed in mid-September. M5-T1
+must reject incomplete configured ADV windows rather than silently averaging available days.
+
+The six M4 aggregate size points motivate comparing functional forms, but establish neither a
+winning model nor general regime boundaries. Fit conclusions remain M5-T2's deliverable.
+
 Not blocking yet; will bite at the milestone named.
 
 - **Monthly archives are not published until the month closes, and `backfill` is month-granular.**

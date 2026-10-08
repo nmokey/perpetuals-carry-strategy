@@ -22,7 +22,23 @@ Milestone status at a glance:
 
 ---
 
-## 2026-08-30 — bulk pull re-costed against stored Parquet and free disk
+## 2026-10-08 — pre-push documentation audit and server handoff
+
+M5 remains draft specifications, with no calibration implementation or fitted model. The local
+checkout has no historical corpus available for inspection. Earlier session reports describe 11
+`0GUSDT` book days (2025-10-01 through 2026-08-01) and a trades backfill stopped by October 2025's
+trade-ID guard; these reports require verification on the data host. The reported October 10
+volume shortfall was approximately 4.4%; it has not been accepted or allowlisted.
+
+The storage projection below is superseded: `0GUSDT` listed in September 2025, so 24 months of its
+history were unavailable at the time. One-day storage samples do not establish a full-corpus cost
+or a statistical confidence interval. Book/trades overlap also does not establish a complete
+strictly prior ADV window. See the current audit note in `blockers.md` before a server backfill.
+
+This push contains documentation only. Historical test counts below are prior-run evidence;
+the Python/C++ suites were not rerun for this documentation audit.
+
+## 2026-08-30 — bulk pull re-costed against stored Parquet and free disk (superseded)
 
 `blockers.md` had asked for this before committing to the pull. Measured from partitions already on
 disk rather than from archive sizes: the 893 MB `BTCUSDT` book archive lands as **544 MB of

@@ -55,6 +55,11 @@ Three things this spec inherits rather than re-decides:
 
 ## The data ceiling, and what this task may honestly claim
 
+**2026-10-08 correction:** the overlap counts below are historical and do not verify complete
+prior ADV coverage. Use the current `blockers.md` audit note and verify the corpus on the data
+host. The M4 aggregate exponents motivate this comparison; they do not establish that either
+candidate must lose or that one form cannot describe touch-relative costs.
+
 M5-T1 records it; this is the task it constrains. As of 2026-08-30 there are **two usable symbol-days**
 (`0GUSDT` 2026-06-01 and 2026-07-01) and the Tardis free tier caps book coverage at ~12 days per
 symbol per year.

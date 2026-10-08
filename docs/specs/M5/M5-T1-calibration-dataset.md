@@ -29,19 +29,25 @@ Expanded into checkable tests:
 | 1 | The same configuration run twice produces a byte-identical Parquet file | `tests/models/test_calibration_dataset.py` |
 | 2 | The row count is exactly `instants × sizes × schedules`, so a silently dropped sample is visible | same |
 | 3 | Every row carries the fields M5-T2 needs to fit *and* to caveat: size, both slippage measures, `levels_consumed`, `beyond_validated_depth`, `crossed_at_entry`, `exhausted_book` | same |
-| 4 | **No look-ahead:** a fill at instant *t* is unchanged by truncating the input stream immediately after *t* | same |
+| 4 | **No look-ahead:** static fills are unchanged by perturbing/truncating events after entry; sliced fills are unchanged by perturbing/truncating events after their final slice, and each slice uses only events available by that slice's time | same |
 | 5 | Sizes are generated log-spaced across a configured range, not from a hard-coded list, and the endpoints appear exactly | same |
 | 6 | Size is recorded in base units **and** as %ADV and %depth, with the ADV window ending strictly before the sampled day | same |
 | 7 | A sampled instant on a crossed book is written with the flag set, not silently skipped | same |
 | 8 | Re-running over a day already present overwrites that partition rather than appending duplicates | same |
 | 9 | The generator refuses a symbol-day with no book partition rather than emitting an empty dataset | same |
+| 10 | Missing or quality-rejected days in the configured strictly prior ADV window cause an explicit failure rather than an average of only available days | same |
 
 Test 1 is the criterion. Test 4 is the one that protects the result: this generator replays a book
 and samples from it, which is the same shape as M4-T2 and the same place look-ahead enters.
 
 ## What this task must not paper over: the data ceiling
 
-**The corpus cannot currently support the criterion M5-T2 is held to.** Measured 2026-08-30:
+**2026-10-08 correction:** the table below describes historical book/trades overlap, not verified
+calibration eligibility. Consult `blockers.md` for the later reported pull and unresolved quality
+gap; verify complete prior ADV windows before counting usable days. The current checkout has no
+corpus available to check.
+
+**Historical corpus snapshot, 2026-08-30:**
 
 | symbol | trades | book days | usable (book **and** trades) |
 |---|---|---|---|
@@ -72,8 +78,8 @@ deliberately, `Fill` and `SlicedFill` cross as read-only value objects, and ther
 entry point.
 
 **Sampling.** Instants are drawn on a fixed grid (every *N*th event, as M4's probe does) rather than
-at random. A grid needs no seed, is trivially reproducible, and cannot accidentally correlate the
-sample with anything. The criterion mentions a seed; where randomness is genuinely wanted later — a
+at random. A grid needs no seed and is reproducible, but event-count sampling weights busy periods
+more heavily; record that sampling limitation. The criterion mentions a seed; where randomness is genuinely wanted later — a
 random subsample of instants, say — it goes through a `numpy.random.default_rng(seed)` recorded in
 the output's metadata.
 
