@@ -11,6 +11,63 @@ more useful record.
 
 ## Active
 
+**2026-10-10 M7-T2 update:** constrained sizing and OD-10 mechanics are verified on
+synthetic inputs. No real BTC/SOL ADV/contract/depth record, fit or approval is invented.
+T4 accounting is next, then T3. Actual input coverage, SOL metadata, historical policy
+selection and funding adequacy remain required; engineering does not clear these gates.
+
+### 2026-10-10 M7-T1 implementation note
+
+Configurable entry/exit mechanics are verified; no real funding-adequacy record or impact
+artifact exists for admitting BTC/SOL research entries. This is intentional admission gating,
+not a zero-trade performance finding. Before a headline run, select and record policy
+parameters using pre-study information and admit dated fees/spreads/hedge costs, depth,
+ADV/notional and contract constraints. T2 can proceed with synthetic sizing cases while
+OD-10 is specified. Land T4 accounting before the executable T3 loop to resolve the
+existing sequencing watch item. B-009–B-012 remain open.
+
+**2026-10-09 M5 update:** T1–T3 code and synthetic verification are implemented. B-009/B-010
+continue to block research fits and headline results, rather than implementation of the
+regression/serialization machinery. No BTC/SOL impact model has been fitted to admitted data.
+M6-T1–T3 funding engineering and M7-T1 decision mechanics are implemented. M7-T2
+sizing is implemented (OD-10 mechanics resolved); T4 accounting is next before T3. OD-9 requires a dated research parameter set before a
+headline run; no real funding approval is issued while B-012 is open. EDA and predictive results
+show varying stationarity diagnostics and a material SOL negative tail. These are inputs
+to posterior/predictive checks, not a blocker to implementing the specified first AR(1)
+model or justification to assume that model is adequate.
+
+### B-012 — Funding predictive adequacy remains unestablished (2026-10-09)
+
+**Blocks:** calling the funding model a calibrated strategy gate or claiming reliable
+probability thresholds. Does not block engineering of rolling/online forecasts or configurable M7 decisions. Synthetic AR(1)
+parameter recovery and exact inference checks pass; warmup conditional predictive checks
+are plausible. The frozen warmup fit undercovers the study (95% intervals cover 90.05% BTC,
+83.47% SOL) and underpredicts negative tails. BTC residual dependence also persists beyond
+lag one. Assess strictly causal rolling predictions, prior sensitivity, residual structure
+and downside calibration before strategy use. Do not tune to the claimed Sharpe/capacity.
+See `docs/analysis/M6-T2-bayesian-funding.md`.
+
+**2026-10-10 T3 update:** causal rolling updates are implemented and future-poisoning tests
+pass. Nominal 95% one-step coverage improves to 96.62% BTC/96.35% SOL, but monthly
+undercoverage and downside asymmetry remain. Weekly cumulative coverage is only
+73.77%/87.91%; prior sensitivity does not certify horizon probabilities. B-012 stays open.
+M7 policy must account for these failures before interpreting probability gates as calibrated.
+See `docs/analysis/M6-T3-rolling-funding.md`.
+
+### B-009 — Continuous BTC/SOL execution coverage is unresolved
+
+**Blocks:** claiming a year of observed-book execution or headline capacity/Sharpe. Public first-of-month feeds provide 12/365 scored days per symbol, plus three warmup days. Regular-day book requests require access (401 on the probe). Choose full daily historical replay, obtaining missing L2 plus references for the study and sufficient warmup, or explicitly headline continuous funding/price results with strictly prior monthly-calibrated inferred costs. User choice is pending; public acquisition and sample validation continue. Never carry forward old books or treat 400M rows as temporal coverage.
+
+### B-010 — Research input and accounting gates are incomplete
+
+BTC/SOL trades need full June 2025–September 2026 coverage and exact daily volume reconciliation. Both October 10, 2025 daily archives failed the gate and were not stored; this stress-day coverage must be repaired or an explicit alternative volume contract must be evaluated without suppressing the defect. The scored window remains fixed. Paired July 1 warmup book downloads returned 429 with a ~23-hour Retry-After; respect the cooldown before resuming sample validation.
+
+Combined funding audit passed for both symbols: 1,371 settlements over 457 days, constant 8-hour cadence, no month-boundary gaps. All four spot/futures price series cover June 2025–September 2026 with complete minute grids. Contract/minimum-notional constraints, fee tiers, mark/index valuation and capital/collateral accounting still need specification before M7 headline metrics.
+
+### B-011 — SOL historical tick grid disagrees across windows
+
+Three disjoint sampled trade windows infer tick 0.001 on 2025-07-01 and 2025-10-01, but 0.01 on 2026-09-01; all infer quantity step 0.01. The metadata combiner correctly refuses one timeless record. This is observed grid disagreement, not yet a verified venue change date. Obtain/verify the historical transition and represent dated metadata regimes before executable sizing. Do not choose the finest tick or replace the last value globally. BTC grids agree across the same dates (tick 0.1, step 0.001); its committed provenance was refreshed.
+
 ### B-004 — Binance's REST/WS API is geo-blocked from this location; Bybit too
 
 **Blocks.** Any live capture or REST pull from Binance — most importantly M1-T3 option (a).
@@ -37,7 +94,7 @@ question, not a technical workaround.
 
 ## Watch list
 
-**2026-10-08 audit correction — supersedes the corpus and costing claims below.** The current
+**Historical pre-server audit (superseded by the BTC/SOL acquisition entry in `progress.md`) — supersedes the earlier costing claims below.** The current
 checkout has no data corpus available to verify. Earlier session reports describe 11 `0GUSDT`
 book days from October 2025 through August 2026, and trades for September 2025 and June–July 2026.
 October's ingestion stopped at the trade-ID guard; a reported October 10 volume shortfall of
@@ -130,9 +187,9 @@ Not blocking yet; will bite at the milestone named.
   validate-against-real-data half of a criterion should not serialize the half that can be built
   against synthetic fixtures. No dependency edge in the doc currently blocks anything.
 
-- **M7-T4 is sequenced after M7-T3, but T3 needs it.** The backtest loop's P&L requires fee and
-  funding settlement accounting. Expect to build a minimal settlement model inside T3 and refine
-  it in T4, rather than treating T4 as purely additive.
+- ~~**M7-T4 is sequenced after M7-T3, but T3 needs it.**~~ **Resolved 2026-10-10 (D-036):**
+  T4 depends on T1/T2 and precedes T3; the loop depends on accounting. Acceptance criteria
+  and task IDs are unchanged. Accounting implementation is next.
 
 - **Funding cadence is not a symbol constant, and M6 assumes it is.** `0GUSDT` ran 4h at listing
   (2025-09-17), 1h from 2025-09-22, and 4h again by 2026-06. An AR(1) fit over a window whose

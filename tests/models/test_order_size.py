@@ -104,6 +104,24 @@ def test_adv_ignores_days_outside_the_window(isolated_data_root):
     assert adv == pytest.approx(20.0)
 
 
+@pytest.mark.parametrize("missing_day", ["2026-06-01", "2026-06-02", "2026-06-03"])
+def test_adv_rejects_an_incomplete_window(isolated_data_root, missing_day):
+    seed_trades(
+        isolated_data_root,
+        "TESTUSDT",
+        {day: [10.0] for day in ["2026-06-01", "2026-06-02", "2026-06-03"] if day != missing_day},
+    )
+    with pytest.raises(order_size.OrderSizeError, match=f"missing days:.*{missing_day}"):
+        order_size.average_daily_volume("TESTUSDT", "2026-06-04", days=3, root=isolated_data_root)
+
+
+@pytest.mark.parametrize("quantity", [0.0, -1.0, float("nan"), float("inf")])
+def test_adv_rejects_invalid_daily_volume(isolated_data_root, quantity):
+    seed_trades(isolated_data_root, "TESTUSDT", {"2026-06-01": [quantity]})
+    with pytest.raises(order_size.OrderSizeError, match="invalid daily volumes"):
+        order_size.average_daily_volume("TESTUSDT", "2026-06-02", days=1, root=isolated_data_root)
+
+
 def test_a_size_round_trips_through_the_adv_fraction(isolated_data_root):
     seed_trades(isolated_data_root, "TESTUSDT", {"2026-06-01": [50.0], "2026-06-02": [150.0]})
 

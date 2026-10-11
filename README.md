@@ -4,6 +4,18 @@
 
 Funding-rate-aware execution cost analysis for crypto perpetual futures.
 
+**Active research: BTCUSDT and SOLUSDT**, over a common walk-forward window of
+**2025-10-01 through 2026-09-30**, with prior warm-up. The primary cost model is a
+regression-calibrated square-root impact law; entry will be gated by rolling Bayesian AR(1)
+funding persistence. Report capacity in %ADV and USDT notional, plus gross and net-of-cost Sharpe.
+See [the study plan](docs/btc-sol-study.md) and [configuration](config/btc-sol-study.toml).
+
+The figures **0.04% ADV / $210K capacity, 0.8 net Sharpe, 2.1 gross Sharpe and 400M+ events are
+claims to test, not results**. Existing `0GUSDT` data remains for engineering tests; its backfill
+has stopped. First-of-month full-day books support sparse calibration, not continuous daily
+execution replay. The headline execution-coverage choice is pending; the study plan identifies
+the extra data needed for daily replay and the limitations of inferred execution costs.
+
 **Research question:** for a given perpetual futures market, does the funding-rate carry edge
 remain positive after realistically modeled slippage and fees — and how does that answer change
 with order size and market liquidity?
@@ -42,7 +54,23 @@ on independently validated book state and most of the interesting range does not
 fill reports whether it crossed that line, so the distinction survives into the results rather than
 living in a footnote.
 
-**Next: M5**, calibrating an impact model against simulated fills.
+**M5-T1–T3 are implemented; BTC/SOL fits remain gated on data validation.** Simulator bindings and a
+deterministic per-fill dataset generator are present. Reconstruction passes through the SPSC
+queue before isolated static/sliced cost simulation reads consumer state. Content-matched quality
+and independent book-replay reports gate calibration. Square-root fitting, diagnostic alternatives
+and chronological held-out residual reports are implemented. Strict per-symbol JSON export/load
+preserves coefficients, provenance and coverage caveats. **M6-T1 funding analysis is complete**:
+[the BTC/SOL findings](docs/analysis/M6-T1-funding-eda.md) include real ACF/PACF, stationarity
+checks and strictly prior monthly diagnostics. **M6-T2 Bayesian AR(1) is implemented**;
+[its predictive checks](docs/analysis/M6-T2-bayesian-funding.md) expose undercalibrated
+study-year uncertainty. **M6-T3 rolling/cumulative forecasts are implemented**;
+[causal checks and results](docs/analysis/M6-T3-rolling-funding.md) show improved one-step
+coverage but weak weekly calibration. **M7-T1 entry/exit rules are implemented**:
+configurable funding-after-cost gates, fixed holding horizons and strict evidence admission
+([policy specification](docs/specs/M7/M7-T1-carry-rules.md)). **M7-T2 sizing is implemented**, separating the profit-optimal size from supported
+break-even capacity ([specification](docs/specs/M7/M7-T2-position-sizing.md)).
+**Next: M7-T4 accounting, before T3 backtesting**;
+model adequacy and execution/accounting gates remain open. No strategy P&L is reported yet.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.
@@ -51,6 +79,11 @@ Data comes from static historical archives — `data.binance.vision` for trades,
 and the Tardis.dev free tier for L2 order book. No venue API is used: `fapi.binance.com` and Bybit
 are geo-blocked from the development location. Nothing needs to run continuously.
 
+Active BTC/SOL acquisition uses `PERPCARRY_DATA_ROOT=data/btc-sol`; completed data under the
+previous root is retained for testing. Follow [the server workflow](docs/server-workflow.md).
+The [code organization audit](docs/codebase-audit.md) records the cleanup and remaining
+maintenance work before M6.
+
 ## Layout
 
 ```
@@ -58,6 +91,7 @@ cpp/      C++ core: order book, replay, comparison + debug rendering, SPSC queue
           threaded pipeline, pybind11 bindings; cpp/tools/ for the local dev tools
           that are allowed file I/O (the core does none)
 python/   Research layer: ingestion, statistical models, strategy/backtest, reporting
+          shared storage, integrity and replay adapters; tools/ owns CLI orchestration
 tests/    pytest suite mirroring python/
 data/     gitignored local Parquet storage
 docs/     design doc, external-dependencies audit, specs, conventions, progress

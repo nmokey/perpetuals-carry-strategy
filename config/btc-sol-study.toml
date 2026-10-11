@@ -1,0 +1,42 @@
+[study]
+symbols = ["BTCUSDT", "SOLUSDT"]
+start = "2025-10-01"
+end = "2026-09-30"
+warmup_start = "2025-07-01"
+volume_start = "2025-06-01"
+data_root = "data/btc-sol"
+timezone = "UTC"
+
+[impact]
+primary_form = "square_root"
+target = "slippage_vs_touch_bps"
+linear_diagnostic = true
+adv_days = 30
+rolling_days = 90
+refit = "monthly_using_only_completed_prior_book_days"
+
+[funding]
+model = "Bayesian_AR1"
+inference = "normal_inverse_gamma"
+rolling_days = 90
+cadence_policy = "validate_per_row_and_segment_or_causally_resample"
+
+[execution]
+headline_coverage = "pending_user_choice"
+public_books = "first_of_month_full_day_L2_plus_top25_reference"
+queue_capacity = 65536
+
+[reporting]
+capacity_units = ["percent_of_trailing_ADV", "USDT_notional"]
+sharpe_frequency = "daily_UTC_including_inactive_days"
+sharpe_annualization_days = 365
+sharpe_risk_free_rate = 0.0
+report = ["gross_Sharpe", "net_of_cost_Sharpe", "fees_and_execution_costs", "unique_processed_events"]
+
+# Hypotheses only. Acquisition, fitting and strategy parameters must not read these as targets.
+[claims_to_test]
+capacity_adv_percent = 0.04
+capacity_usdt = 210000
+net_sharpe = 0.8
+gross_sharpe = 2.1
+processed_events_minimum = 400000000

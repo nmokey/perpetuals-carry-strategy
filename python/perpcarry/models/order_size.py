@@ -94,6 +94,14 @@ def average_daily_volume(
     )
     if volumes.empty:
         raise OrderSizeError(f"{symbol}: no trades in the {days} days before {day}")
+    expected = {(day - dt.timedelta(days=offset)).isoformat() for offset in range(1, days + 1)}
+    missing = sorted(expected - set(volumes.index))
+    if missing:
+        raise OrderSizeError(
+            f"{symbol}: incomplete {days}-day ADV window before {day}; missing days: {missing}"
+        )
+    if not volumes.map(lambda value: 0 < value < float("inf")).all():
+        raise OrderSizeError(f"{symbol}: ADV window before {day} has invalid daily volumes")
     return float(volumes.mean())
 
 

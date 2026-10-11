@@ -12,6 +12,10 @@ the sweep of the rest, done before implementation rather than during it.
 
 ---
 
+## 2026-10-08 server scope update
+
+Active research is BTCUSDT/SOLUSDT, scored October 2025–September 2026. A streamed status/magic probe verified 188 target archives including prehistory; this establishes availability, not complete data. Both full July 2025–September 2026 funding histories and June 2025–September 2026 spot/futures 1m bars have now been downloaded and checked. Ordinary-day L2 requests returned 401; first-of-month full-day feeds do not establish continuous execution coverage. Subsequent sampled-book downloads returned 429 with a ~23-hour Retry-After; no retry is scheduled during that interval. SOL observed tick grids disagree across disjoint dates, and October 10 trades fail admission for both research symbols. See `btc-sol-study.md` and `blockers.md` for current gates; the original audit below remains historical evidence, not a fresh server API check.
+
 ## Summary
 
 | # | Assumption (design doc) | Status | Impact |

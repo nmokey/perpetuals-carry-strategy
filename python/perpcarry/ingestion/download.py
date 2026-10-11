@@ -16,7 +16,6 @@ Two properties matter more than they might look:
 from __future__ import annotations
 
 import gzip
-import hashlib
 import time
 import zipfile
 from collections.abc import Callable
@@ -25,6 +24,7 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
+from perpcarry.integrity import sha256 as sha256
 from perpcarry.storage import data_root
 
 CHUNK_SIZE = 1 << 20  # 1 MiB
@@ -126,15 +126,6 @@ def _stream_to(
                 handle.write(chunk)
                 if on_chunk is not None:
                     on_chunk(len(chunk))
-
-
-def sha256(path: str | Path, chunk_size: int = CHUNK_SIZE) -> str:
-    """SHA-256 of a file, read in chunks so large archives stay out of memory."""
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        while chunk := handle.read(chunk_size):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def parse_checksum(text: str) -> str:

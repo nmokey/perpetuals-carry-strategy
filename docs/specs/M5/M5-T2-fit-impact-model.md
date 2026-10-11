@@ -1,8 +1,8 @@
 # M5-T2 — Fit impact model(s)
 
 **Milestone:** M5
-**Status:** Draft
-**Depends on:** M5-T1; OD-7 (**resolved 2026-08-30** — fit both, report per size regime, D-024)
+**Status:** Implemented 2026-10-09; synthetic verification complete, BTC/SOL research fits data-gated
+**Depends on:** M5-T1; OD-7 (primary square-root, linear/power diagnostics; D-026/D-029)
 **Design doc:** Section 4.5, Section 5 (M5), OD-7
 
 ## Goal
@@ -38,7 +38,11 @@ rigged comparison is the one where linear must win.
 
 Test 8 is not hypothetical: see the data ceiling below.
 
-## What OD-7's resolution (D-024) already settled
+## Active BTC/SOL scope
+
+The primary law is regression-calibrated square-root impact. Linear and free-exponent fits are diagnostics; they must not replace the requested primary law or force a favorable coefficient. Fit separately by symbol/schedule and validated-depth regime, using completed strictly prior days in chronological folds. The common period and monthly sampling limitation are defined in `docs/btc-sol-study.md`. Historical 0G counts below are engineering context, not active calibration coverage.
+
+## What OD-7's historical resolution (D-024) established
 
 Three things this spec inherits rather than re-decides:
 
@@ -118,7 +122,7 @@ difficult to write.
 - Serializing the fitted parameters — **M5-T3**.
 - Using the model to size positions — **M7-T2** (OD-10).
 - Funding-side modelling — **M6**.
-- Deciding which symbols get compared — **OD-3**, deferred to M8.
+- Changing the research symbols — **OD-3** is resolved to BTCUSDT/SOLUSDT.
 
 ## Open questions
 
@@ -136,3 +140,55 @@ any single pooled R².
 Recommendation: yes, as a separate fit rather than a covariate. M4 measured that working an order
 roughly halves large-order cost, so pooling the two schedules would fit a curve to a mixture and
 describe neither.
+
+## Implemented interface and decisions (2026-10-09)
+
+`models/impact_model.py` provides `fit(frame, train_end=..., test_end=..., config=...)`,
+`FittedLaw.predict(adv_fraction)` and the evidence-bound calibration loader. Training uses
+the 90 calendar days strictly before the explicit cutoff; testing uses complete UTC days
+in `[train_end, test_end)`. Each monthly walk-forward fold supplies its own fixed cutoffs.
+Later partitions are not loaded for an earlier fold, and outside-fold rows do not enter
+validation, coefficients, size bands or residuals. A group needs eligible training and
+held-out days in a comparable depth regime; unavailable groups/regimes are recorded,
+and a run with no evaluable square-root fit fails.
+
+The Q1–Q3 starting choices are implemented: equal eligible row weights, pooled fits with
+per-training-day coefficients and their spread, separate execution schedules. Symbols
+and buy/sell directions are also separated. Every depth regime gets an all-size diagnostic
+and three size bins by default. Bin boundaries are quantiles of unique training sizes,
+not inferred liquidity breakpoints or boundaries learned from held-out data. ADV input
+is a fraction (percent is fraction × 100). The coefficient's output unit is bps.
+
+Square-root and linear models use least squares through the origin. The power diagnostic
+uses log-space OLS on positive training targets, explicitly counts nonpositive exclusions,
+and scores all eligible held-out targets in original bps. Signed slippage is retained:
+sliced fills can benefit from price movement, and static fills can have tiny signed
+rounding residuals. Negative fitted coefficients are reported without clipping; the sign
+screen flags them as unusable for a nonnegative impact-cost law. This is a diagnostic,
+not permission to apply negative transaction costs in M7. Constant-target R² is null
+with an explicit reason; poor negative R² is preserved. No fallback coefficient is used.
+
+The CLI verifies M5-T1 manifest identities, current input evidence and output hashes,
+including stability during reading. It reads Parquet fragments directly so adjacent
+manifest JSON and Hive/string type inference cannot corrupt loading. Reports contain
+training/test dates and counts, exclusions, per-day fits, depth and size regimes,
+extrapolation flags, and residuals versus predicted impact and normalized size.
+`report.json`, `residuals.parquet` and residual plots stay under the ignored data root.
+Dense residual rows/plots must not be treated as approved public vendor-data exports.
+Depth/exhaustion flags are outcome diagnostics, not permission to select an entry model
+using future slice outcomes. M7 must use decision-time observables when selecting a
+cost regime. M5-T3 still owns a versioned deployable parameter format and loader.
+
+Example, after BTC/SOL calibration partitions pass admission:
+
+```bash
+export PERPCARRY_DATA_ROOT="$PWD/data/btc-sol"
+uv run python -m perpcarry.models.impact_model --symbol BTCUSDT --symbol SOLUSDT \
+  --train-end 2025-10-01 --test-end 2025-11-01 --train-days 90
+```
+
+The command writes under `impact_fits/train-end=2025-10-01_test-end=2025-11-01/`.
+Rerunning that fold replaces its report/residuals and removes obsolete residual figures;
+avoid concurrent writers to the same destination. The actual BTC/SOL invocation currently
+refuses missing calibration partitions. This task completes fitting machinery, not a
+real-data coefficient, capacity or Sharpe claim.

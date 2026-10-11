@@ -1,7 +1,7 @@
 # Design Document: PerpCarry
 ## Funding-Rate-Aware Execution Cost Analysis for Crypto Perpetual Futures
 
-**Status:** Draft v1
+**Status:** Active BTC/SOL scope, updated 2026-10-10; M0–M4 engineering retained, M5-T1–T3 implemented with real fits gated; M6-T1–T3 implemented and causally verified; predictive adequacy remains open; M7-T1/T2 rules and sizing implemented; M7-T4 accounting next, before T3.
 **Author:** Ryan Zheng
 **Purpose:** Seed document for spec-driven development. Each task in Section 5 is intended to become one implementation spec/ticket. Open decisions in Section 6 should be resolved (or explicitly deferred with a documented default) before specs are written for the milestones they affect.
 
@@ -38,6 +38,14 @@ Perpetual futures track their underlying spot asset through periodic **funding p
 Most student quant projects either (a) build a generic backtester with an assumed flat transaction cost, or (b) build a market-impact model in isolation with no strategy attached. This project ties the two together: the **execution cost model is calibrated from real order book data**, not assumed, and it directly determines the strategy's entry threshold and position sizing. The deliverable isn't "a profitable strategy" — it's a rigorous, honest answer to a capacity question, which is arguably more valuable as a research artifact than a backtest that just shows a nice equity curve.
 
 ### 1.4 Non-Goals
+
+**Active scope (2026-10-08).** BTCUSDT and SOLUSDT, common scored window 2025-10-01 through
+2026-09-30, warm-up July–September 2025, and June 2025 volume prehistory. Square-root impact
+regression is the primary execution model; rolling Bayesian AR(1) persistence gates entry.
+Report %ADV/notional capacity and gross/net-of-cost Sharpe. The specific capacity, Sharpe and
+event-count figures are hypotheses, not acceptance targets. See `btc-sol-study.md` for the
+coverage assessment: first-of-month full-day L2 does not provide daily execution replay.
+`0GUSDT` expansion has stopped; its completed engineering evidence and test data are retained.
 
 - **Not** a live trading system — no order routing, no exchange connectivity beyond historical/read-only data pulls.
 - **Not** a multi-asset portfolio optimizer — scope is intentionally narrow (one strategy, 1-2 symbols) to stay deep rather than broad.
@@ -202,7 +210,9 @@ Exposes `OrderBook`, `BookReplayer`, `Pipeline` and (from M4) the impact simulat
 **As built (M3-T1/M3-T3), two things this paragraph did not say.** The surface is pinned by a test, so binding a new symbol is a deliberate act rather than a side effect of the C++ function existing; and `OrderBook::levels()` is **copied** across the boundary rather than viewed, because the C++ span is invalidated by the next `apply()` and a stale view would surface as a plausible wrong fill price rather than as a crash. `BookReplayer` has no single-row entry point on the Python side — that is Risk R4 in its most tempting form, and it is enforced by a test.
 
 ### 4.5 Impact Model Calibration (Python, regression)
-Fits a market impact model (linear and/or square-root functional form, see OD-7) against simulated slippage data across a range of order sizes, using out-of-sample validation rather than in-sample fit alone.
+Fits the primary square-root impact law against simulated touch-relative slippage across order
+sizes, with chronological out-of-sample validation. Linear fits remain diagnostic comparisons
+(OD-7). Fit coefficients from prior days only, separately for BTC/SOL, schedules and depth regimes.
 
 ### 4.6 Funding Persistence Model (Bayesian, Python)
 Models funding rate as an AR(1) process with Bayesian parameter estimation, updated in a strictly rolling/online fashion (no look-ahead — see OD-12). Produces a posterior predictive distribution over cumulative future funding, not just a point estimate.
@@ -320,15 +330,18 @@ identified last — during the external-dependencies audit, not in the original 
 |---|---|---|---|---|
 | M7-T1 | Entry/exit rule logic | `CarryStrategy` class | Unit tests for each decision branch on synthetic inputs | M5-T3, M6-T3, **OD-9 resolved** |
 | M7-T2 | Position sizing / capacity logic | Sizing function bounded by modeled marginal impact cost | Matches expected behavior on hand-constructed test cases | M7-T1, **OD-10 resolved** |
-| M7-T3 | Walk-forward backtest loop | `run_backtest.py` | Reproducible given fixed seed; "future data poisoning" test confirms no leakage | M7-T2, **OD-12 resolved** |
-| M7-T4 | Fee & funding settlement accounting | P&L module incorporating real fee schedule + funding timing | P&L reconciles against a hand-computed example trade | M7-T3, **OD-11 resolved** |
+| M7-T4 | Fee & funding settlement accounting | P&L module incorporating real fee schedule + funding timing | P&L reconciles against a hand-computed example trade | M7-T1, M7-T2, **OD-11 resolved** |
+| M7-T3 | Walk-forward backtest loop | `run_backtest.py` | Reproducible given fixed seed; "future data poisoning" test confirms no leakage | M7-T2, M7-T4, **OD-12 resolved** |
+
+T4 now precedes T3 to supply its accounting contract (D-036). T1/T2 engineering is
+implemented; real-input admission remains gated.
 
 ### M8 — Full Backtest: BTC vs. Altcoin Comparative Study
 
 | ID | Task | Deliverable | Acceptance Criteria | Depends On |
 |---|---|---|---|---|
-| M8-T1 | Full backtest — liquid symbol | P&L series, Sharpe, max drawdown, capacity curve | Runs end-to-end without manual intervention | M7-T4 |
-| M8-T2 | Full backtest — illiquid symbol | Same outputs, second symbol | Same | M7-T4, **OD-3 resolved** |
+| M8-T1 | Full backtest — BTCUSDT | P&L series, Sharpe, max drawdown, capacity curve | Runs end-to-end without manual intervention | M7-T4 |
+| M8-T2 | Full backtest — SOLUSDT | Same outputs, second symbol | Same | M7-T4, **OD-3 resolved** |
 | M8-T3 | Sensitivity sweep | Grid over order size / entry threshold / holding period | Results stored as Parquet, reproducible | M8-T1, M8-T2 |
 | M8-T4 | Naive-baseline comparison | Side-by-side: impact-aware vs. flat-cost-assumption strategy | Quantifies overstatement of returns from ignoring impact modeling | M8-T1, M8-T2 |
 
@@ -405,8 +418,9 @@ sequence-based.
 **OD-3 — Symbol selection**
 *Affects: M8-T2.*
 Context: Need one liquid control symbol and one genuinely thinner symbol with usable public history. Liquidity rankings drift, so pre-committing to a specific altcoin now risks it becoming irrelevant by build time.
-Recommendation: BTC as control; select the altcoin based on live ADV/liquidity data at the time M8 begins, not now.
-Status: OPEN.
+Decision: **BTCUSDT and SOLUSDT**, explicitly selected by the user. Compare measured liquidity;
+do not assume SOL is illiquid or substitute another symbol to obtain a desired result.
+Status: **RESOLVED 2026-10-08**, D-026. Supersedes the deferred-selection recommendation.
 
 **OD-4 — Spot leg treatment**
 *Affects: M7, M8.*
@@ -437,24 +451,36 @@ Status: **RESOLVED 2026-08-29 — (b).** See D-020, which adds two things this s
 *Affects: M5-T2.*
 Options: linear (Almgren-Chriss-style temporary/permanent split), square-root law, or fit both and compare.
 Recommendation: Fit both — the comparison itself (e.g., "square-root fit the altcoin better, linear fit BTC better") is a legitimate finding worth reporting.
-Status: **RESOLVED 2026-08-30 — fit both, and report per size regime.** See D-024, which adds what this section does not say: the M4 sweep already shows the implied exponent climbing from 0.20 to 1.17 across the size range, so no single form describes the whole curve; fitting must use touch-relative slippage or the half-spread is double-counted downstream; and the super-linear large-order regime is precisely the one where the book is not independently validated (D-021).
+Status: **RESOLVED, updated 2026-10-08 — square-root is the requested primary model**, with linear
+fits retained as diagnostics and reporting per size/depth regime (D-026). D-024's touch-relative
+target and depth caveat remain. Its historical `0GUSDT` aggregate sweep is motivation for checking
+fit quality, not a BTC/SOL result or proof of which functional form wins.
 
 **OD-8 — Bayesian inference method**
 *Affects: M6-T2.*
 Options: closed-form conjugate (Normal-Inverse-Gamma for AR(1)) — fast, transparent, easy to run online; MCMC (PyMC/Stan) — more flexible (e.g. regime-switching) but expensive to re-run at every rolling step.
 Recommendation: Closed-form conjugate for the core rolling backtest; MCMC reserved for an optional richer model as an M9 addendum, off the critical path.
-Status: OPEN.
+Status: **RESOLVED 2026-10-08 — closed-form Normal-Inverse-Gamma Bayesian AR(1)** for the initial
+rolling implementation (D-026). Prior choices, cadence handling and predictive checks remain
+implementation specifications, not fitted results.
 
 **OD-9 — Entry/exit threshold policy**
 *Affects: M7-T1.*
 Options: fixed threshold (e.g. "enter if annualized funding > 20%") vs. Bayesian-credible-interval-based ("enter if P(cumulative funding > round-trip cost) > 80%").
 Recommendation: Credible-interval-based — ties the Bayesian model's output meaningfully into the decision rather than using it decoratively.
-Status: OPEN, leaning credible-interval.
+Status: **ENGINEERING RESOLVED 2026-10-10** (D-035): configurable probability and
+positive-expected-edge entry, lower continuation threshold, fixed remaining holding horizon
+and explicit cost/funding admission. Horizon and thresholds are required inputs; dated
+pre-study parameter selection and predictive adequacy remain gates for headline runs.
+No threshold is selected to reproduce a Sharpe claim.
 
 **OD-10 — Position sizing / capacity model**
 *Affects: M7-T2, M8-T3.*
 Recommendation: Size until modeled marginal impact cost equals marginal expected funding edge — this directly produces the capacity curve that's the project's central output, rather than treating capacity as an afterthought.
-Status: OPEN, leaning capacity-curve approach.
+Status: **ENGINEERING RESOLVED 2026-10-10** (D-036): maximize expected net dollars using
+square-root marginal costs, T1 probability admission and executable/support bounds.
+Report chosen size, feasible maximum and supported break-even separately. Real dated
+ADV/metadata/calibration and model adequacy remain research gates.
 
 **OD-11 — Fee & funding settlement assumptions**
 *Affects: M7-T4.*
@@ -479,7 +505,9 @@ The funding *interval* half of this decision is settled separately and cleanly:
 *Affects: M7-T3.*
 Options: fixed train/test split vs. walk-forward/rolling re-calibration.
 Recommendation: Walk-forward — more realistic, and the look-ahead unit test in M7-T3 becomes a concrete, demonstrable rigor artifact (directly addresses the "look-ahead bias" gap flagged in earlier resume feedback).
-Status: OPEN, leaning walk-forward.
+Status: **RESOLVED 2026-10-08 — twelve common chronological monthly walk-forward folds**, scored
+2025-10-01 through 2026-09-30 with warm-up excluded (D-026). Data coverage and execution fidelity
+must be stated before reporting headline metrics.
 
 **OD-13 — Build tooling**
 *Affects: M0.*
@@ -512,7 +540,7 @@ Status: **RESOLVED 2026-08-12 at M0-T4.** Adopted as recommended; Hive partition
 | R2 — Funding persistence signal turns out to be weak or absent | Not a failure mode — a rigorous "the edge doesn't survive realistic costs" finding is itself a valid, honest research result and arguably a *more* interesting one |
 | R3 — Scope creep from trying to hit every technique at once | Milestones ordered so M0-M4 alone is a complete, demonstrable systems project; M5-M10 add research depth incrementally and can be paused after any milestone |
 | R4 — pybind11 interop overhead undermines the "low-latency" story | Keep the C++/Python boundary at the pipeline level (post-SPSC-queue), not per-tick; benchmark and report interop overhead honestly rather than hand-waving around it |
-| R5 — Altcoin liquidity ranking becomes stale by the time M8 runs | Defer symbol selection (OD-3) to build time rather than locking it in the design doc |
+| R5 — Cross-symbol liquidity assumptions are wrong | BTC/SOL are fixed by scope; measure their liquidity in the common window and report it rather than label SOL illiquid a priori |
 | R6 — Rigor claims (no look-ahead, determinism) silently decay after the commit that introduced them | Encode each as a CI check rather than a one-off manual verification (Section 4.9); a claim nothing re-runs is a claim about the past |
 | R7 — CI becomes flaky or slow and stops being read | Network-dependent and long-running checks stay out of the per-PR tier; per-PR CI must remain fast enough that a red build is always believed |
 
@@ -560,7 +588,8 @@ perpcarry/
 │       │   └── validate_data.py
 │       ├── models/
 │       │   ├── order_size.py        # M4-T3: %ADV and %depth
-│       │   ├── impact_model.py      # M5, not yet written
+│       │   ├── impact_model.py      # M5-T2 chronological fitting + diagnostics
+│       │   ├── impact_model_io.py   # M5-T3 versioned per-symbol JSON + strict loader
 │       │   └── funding_model.py     # M6, not yet written
 │       ├── strategy/
 │       │   ├── carry_strategy.py

@@ -13,14 +13,225 @@ Milestone status at a glance:
 | M2 — Order book reconstruction (C++) | **Complete** (2026-08-29), T1–T3 |
 | M3 — Bindings & SPSC queue | **Complete** (2026-08-29), T1–T3. OD-6 resolved |
 | M4 — Impact simulator (C++) | **Complete** (2026-08-30), T1–T3 |
-| M5 — Impact model calibration | Specced (T1–T3, 2026-08-30); not started. OD-7 resolved |
-| M6 — Funding persistence model | Not started |
-| M7 — Strategy & backtest | Not started |
+| M5 — Impact model calibration | T1–T3 implemented (2026-10-08/09); BTC/SOL fits/exports data-gated |
+| M6 — Funding persistence model | T1–T3 implemented and verified; predictive adequacy open (B-012) |
+| M7 — Strategy & backtest | T1/T2 implemented and verified (2026-10-10); T4 accounting next, before T3 |
 | M8 — Comparative study | Not started |
 | M9 — Analysis & writeup | Not started |
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-10-10 — Accumulated-change audit for authorized publication
+
+Reviewed the server work through M7-T2, fixed stale dependency guidance, and checked
+publication candidates for data/build artifacts and credential patterns. Locked extension
+rebuild and standalone CMake/Ninja build passed; 85 C++ and 657 offline Python tests
+passed freshly. Ten network tests were deselected. Root Ruff lint/format and whitespace
+checks passed. No blocking implementation defect was found in the reviewed paths;
+B-009–B-012 and T4/T3 implementation remain open. See
+`docs/pre-push-audit-2026-10-10.md` for scope, evidence and limits. User authorized pushing
+these changes after the audit; hosted CI is not yet verified by these local checks.
+
+## 2026-10-10 — M7-T2 constrained sizing and supported capacity
+
+Implemented expected-net-dollar sizing with square-root marginal impact, separately
+reporting supported break-even capacity. Chosen base quantity, USDT notional and ADV
+fraction honor the unchanged T1 entry gate, both impact sides' common support, dated
+contract minima, finite notional/ADV caps and caller-admitted validated liquidity.
+No feasible profitable admitted lot returns zero. Shared cost-curve admission avoids
+repeated disk loads. Zero impact never means infinite capacity or extrapolated roots.
+
+OD-10 mechanics resolved in D-036. The existing sequencing defect is corrected: next
+is T4 accounting, then T3 walk-forward. Actual BTC/SOL impact/ADV/metadata and funding
+adequacy remain gated (B-009–B-012). No capacity/Sharpe/P&L results, downloads, dependency
+changes or remote writes were produced; M7 remains incomplete.
+
+Verification: 657 offline Python tests passed (55 new), ten network tests deselected;
+26 isolated faults caught, including marginal/average confusion, capacity units, lot/
+bound/probability/chronology defects, support intersection and shared cost admissions.
+Six independent exhaustive lot-grid comparisons and actual synthetic M5/M6/T1 integration
+pass. Ruff, compiled-free architecture and whitespace checks pass. C++ unchanged/not rerun
+(85 passed in the preceding organization audit).
+
+## 2026-10-10 — M7-T1 entry/exit rules and admitted cost integration
+
+Implemented deterministic enter/wait/hold/exit intents using cumulative funding after
+costs, strict probability thresholds and positive expected incremental edge. Held positions
+keep their original horizon and compare continued holding against closing now; sunk
+entry costs are excluded. M5 square-root sell-entry/buy-close cost quotes require supported
+size/depth strata, known validation cutoffs and explicit spreads, fees and hedge costs.
+M6 forecasts are bound to symbol and a fingerprint of model sources/prior/window settings;
+adequacy approval must match that scope, cadence and remaining horizon. Synthetic cost
+admission defaults off. No actual research approval or BTC/SOL fit was manufactured.
+
+OD-9 mechanics are resolved in D-035: horizon and probability parameters remain explicit
+required inputs, with dated pre-study selection still required for headline runs. Test
+parameters are synthetic examples. B-009/B-010/B-011/B-012 remain open. Next task is
+M7-T2 sizing and OD-10 specification; accounting must land before an executable T3 loop.
+
+Verification: 602 offline Python tests passed (85 new), ten network tests deselected;
+22 isolated scratch mutations caught; synthetic M5→M6→M7 integration, independent
+imports, Ruff lint/format and whitespace checks passed. C++ unchanged/not rerun
+(85 passed in the preceding organization audit). No downloads, dependency changes,
+remote writes, strategy P&L, Sharpe or capacity results. M7 is started, not complete.
+
+## 2026-10-10 — M6-T3 causal rolling and cumulative funding forecasts
+
+Implemented settlement-at-a-time updates, observed-only 90-day refits, explicit cadence
+resets/staleness/gap gates, and recursive joint posterior predictive funding sums.
+Forecasts precede admission of the current rate; retrospective scoring is separate.
+Exact one-step comparisons, diagnostic 3-/21-settlement horizons, monthly breakdowns
+and predeclared prior sensitivity use the existing hash-admitted BTC/SOL corpus.
+
+Actual 1,095 scored settlements per symbol: rolling 95% one-step coverage is 96.62% BTC,
+96.35% SOL versus same-window frozen 90.14%/83.20%. One-day cumulative coverage is
+95.43%/96.61%; weekly coverage remains only 73.77%/87.91%. Downside asymmetry,
+February misses and residual dependence prevent clearing B-012. No prior, threshold or
+horizon was selected to make results pass. Reviewed: `docs/analysis/M6-T3-rolling-funding.md`.
+
+Verification: 517 offline Python tests passed (30 new); ten network tests deselected;
+16 isolated scratch mutations caught; repeated real-data reports byte-identical;
+Ruff lint/format, architecture and whitespace checks passed. C++ unchanged/not rerun
+(85 passed in preceding organization audit). No downloads, dependencies, remote writes,
+strategy accounting or headline metrics changed. M6 engineering is implemented; next is
+M7-T1 policy specification (OD-9 partial), with model/data/accounting gates still explicit.
+
+## 2026-10-09 — M6-T2 Bayesian funding model and adequacy checks
+
+Implemented exact Normal-Inverse-Gamma AR(1), coefficient/variance credible intervals,
+Student-t one-step prediction, joint posterior draws and conditional predictive checks.
+Explicit fraction/bps units, proper baseline prior and unrestricted phi are documented
+in D-033 and the just-in-time spec. No rolling logic or entry policy implemented ahead of T3.
+
+Existing audited BTC/SOL funding corpus: fit only 276 warmup settlements (275 pairs),
+freeze posterior, check 1,095 study settlements per symbol conditional on previous observed
+funding. Warmup conditional replication is plausible; study nominal 95% coverage is
+90.05% BTC and 83.47% SOL, with downside underprediction and BTC higher-lag residual
+structure. Synthetic recovery meets acceptance; real study adequacy remains unestablished.
+Reviewed findings: `docs/analysis/M6-T2-bayesian-funding.md`. Next implementation: M6-T3.
+
+Verification: 487 offline Python tests passed (25 new), 10 network tests deselected;
+13 scratch mutations caught; repeated real-data report byte-identical; Ruff lint/format
+and whitespace checks passed. No C++ changes/tests rerun (85 passed in preceding audit).
+Declared already-installed SciPy directly and refreshed lock dependency metadata only.
+No downloads, remote writes, model tuning, strategy returns, Sharpe or capacity claims.
+
+## 2026-10-09 — M6-T1 real BTC/SOL funding exploratory analysis
+
+Implemented evidence-bound funding-series loading, cadence-segmented descriptive
+statistics/ACF/PACF, ADF/KPSS checks, strictly prior monthly 90-day diagnostics and a
+reproducible JSON/Markdown/plot command. The loader uses writer-owned storage names,
+explicit fragment reads, endpoint/spacing/schema checks, prior audit hashes and stable
+read checks. Reporting and CLI live outside statistical code, preserving D-031.
+
+The actual corpus matched all 914 funding fragments: 1,371 settlements/457 days per
+symbol, with 276 warmup and 1,095 study settlements at constant 8h cadence. Study funding
+was positive for 76.44% of BTC and 53.06% of SOL settlements; mean funding was +0.3081
+and -0.1512 bps respectively. Lag-one ACF was 0.6646/0.6691. Mixed full-period stationarity
+diagnostics and SOL's negative tail require rolling/predictive validation, not a globally
+stationary or profitable-carry claim. Reviewed findings: `docs/analysis/M6-T1-funding-eda.md`.
+Generated unrounded results and six plots stay under ignored research storage.
+
+Verification: 462 offline tests passed, including 34 new M6-T1 tests; 10 network tests
+deselected. Eleven isolated mutations were caught across admission, chronology, cadence,
+units, ACF/PACF, opposing nulls, p-value bounds and streaks. Lint/format/whitespace checks
+passed. A synthetic timestamp fixture needed explicit pandas millisecond resolution;
+the real corpus was unaffected and the lesson is recorded in C17. No C++ changes,
+downloads, fitted Bayesian model, strategy returns or capacity claims. Next: M6-T2.
+
+## 2026-10-09 — code organization audit and cleanup before M6
+
+Reviewed Python layering, shared utilities, test placement, schema readability, C++
+ownership/I/O boundaries and current project guidance. Removed model dependencies on
+CLI tools: content hashing, book partition discovery, ordered streaming and Arrow-to-C++
+conversion now have shared library homes. UTC calendar helpers no longer belong to a
+dataset fetcher. Statistical model imports no longer require compiled replay. Split the
+artifact validator by provenance/fit/artifact responsibilities and moved adapter tests
+alongside the shared module. Updated stale M5/OD-8 guidance. Scope and formats are retained.
+
+Verification: 428 offline Python tests passed (10 network deselected), 85 C++ tests
+passed, and lint/format/whitespace checks passed. Six scratch mutations caught ordering,
+mapping, hashing, date anchoring and dependency regressions; nine serialization mutations
+were also rechecked and detected. A single-fragment ordering fixture initially missed
+reversed file order; the new multiple-fragment/tied-timestamp fixture catches it.
+Full findings, fixes and remaining maintenance work are in `docs/codebase-audit.md`.
+No C++ source, study configuration, acquired data or research claims changed. M6 is next.
+
+## 2026-10-09 — M5-T3 model serialization implementation
+
+Added schema-1 per-symbol JSON export, strict loading and explicit stratum lookup.
+Coefficients round-trip bit-identically, including a 17-significant-digit fixture.
+Training boundaries, corpus days/counts, fitting date/code/source hash and input
+manifest hashes accompany every artifact. Depth counts, size bands, signed-cost
+flags, coverage limitations and unavailable strata are preserved. Units, nested
+fields, duplicate keys/fits, finite numbers, chronological splits and evidence
+coverage are checked. Validated writes replace files atomically. The fitting CLI
+can optionally export to a chosen per-fold model directory.
+
+Verification: 425 offline Python tests passed, including 33 new serialization tests;
+10 network tests were deselected. Nine isolated serialization mutations were caught,
+covering precision loss, schema version/extra fields, depth counts, future training
+days, missing source evidence, duplicate keys, caveat loss and signed-cost clipping.
+The future-day fixture was adjusted to isolate chronology from corpus-day consistency;
+the intended chronological guard now causes its failure. Mutation details stay ignored
+in `data/reports/m5-t3-mutation-audit.json`. Ruff checks and whitespace validation passed.
+No C++ source was changed for this task. Actual BTC/SOL model export remains blocked
+by missing admitted calibration partitions; no research models/results were created.
+
+M5 implementation is complete, with empirical calibration still gated. Next task:
+M6-T1 funding EDA, using the acquired BTC/SOL funding history.
+
+## 2026-10-09 — M5-T2 impact fitting implementation
+
+Implemented square-root primary fits, linear/power diagnostics, and explicit whole-day
+chronological train/test cutoffs with a default prior 90-day window. Coefficients and
+residual diagnostics are separate by symbol, side, schedule, independently validated
+depth and training-only size band. Reports include held-out R²/RMSE/MAE, exclusions,
+per-training-day coefficients/spread, signed target counts and extrapolation flags.
+Negative fits are not clipped into admissible cost models; undefined constant-target
+R² and unavailable regimes are explicit. No constant-cost fallback is provided.
+
+The CLI admits only matching M5-T1 manifests and current quality/replay evidence; direct
+Parquet-fragment reads avoid manifest/Hive schema collisions. Before/after fingerprints
+reject concurrent changes. Reports, dense residual Parquet and residual plots remain
+under ignored storage; deployable serialization/loader remain M5-T3. The actual BTC/SOL
+fold invocation refused missing calibration partitions, as intended. No research
+coefficients, capacity or Sharpe were produced, and no data was downloaded for this task.
+
+Verification: 392 offline Python tests passed (37 M5-T2 tests), with 10 network tests
+deselected. Ruff lint/format and diff whitespace checks passed. Twelve isolated mutations
+were caught, covering forms, future-target leakage, row splits, target choice, depth
+pooling, exclusions, one-day acceptance, residuals, future size bins, post-read hashes,
+and signed-coefficient/static-rounding clipping. Audit details remain ignored under
+`data/reports/m5-t2-mutation-audit.json`. C++ source is unchanged by M5-T2; earlier
+engineering and acquisition evidence remains intact.
+
+## 2026-10-08 — data-source and execution-options discussion recorded
+
+Added `btc-sol-data-options.md` to record why snapshots plus trades cannot reconstruct missing
+book history, the full-day scope of free first-of-month datasets, and the separate 401 access
+restriction and 429 rate limit. Documented source roles, full historical replay, sampled-day
+impact studies, continuous carry with inferred costs, cost-sensitivity prototypes, and future
+live collection. One-day pilots and cross-day validation are distinguished from annual claims.
+Bar-derived ADV remains an explicit unselected alternative to the current trade-derived contract.
+
+Checked official Tardis live-streaming documentation: its free local software connects directly
+to exchanges rather than receiving a hosted Tardis relay. Read-only server checks found Binance
+depth WebSocket upgrade 101 and REST snapshot restricted-location status 451. No collector was
+started, no purchase/download expansion was authorized by this documentation request, and no
+headline coverage choice or study configuration changed. Documentation-only changes; application
+tests were not rerun for this entry. Prior engineering and acquisition evidence below is preserved.
+
+## 2026-10-08 — BTC/SOL scope, server engineering and fresh acquisition
+
+Research realigned to BTCUSDT/SOLUSDT. Stopped both active 0G expansion processes with cleanup; existing partitions are retained. No old-machine corpus is being copied. Common scored period is 2025-10-01–2026-09-30, warmup July–September 2025, and June prehistory for strictly prior ADV. Config and study coverage are in `config/btc-sol-study.toml` and `btc-sol-study.md`; numerical capacity/Sharpe/event claims are explicitly untested hypotheses.
+
+188 BTC/SOL archive availability probes passed (status and magic, not full-data quality). Regular October 2 book requests returned 401. Free first-of-month full-day feeds cover only 3.29% of scored days; daily replay needs additional historical access, while inferred costs require a clearly labeled model-based backtest. Headline coverage remains pending user selection.
+
+Both symbols' July 2025–September 2026 funding histories were freshly downloaded with existing settlement guards. Spot/futures 1m price ingestion was added with separate caches, mandatory published checksums, spot microsecond normalization, complete month grids and close-time availability. Both complete price histories and the October 1 trade pilots are now acquired and validated in `data/btc-sol`. Funding combined-window audit passed: 1,371 settlements / 457 days per symbol with constant 8-hour cadence and no boundary gaps. Warmup/prehistory/late-study trade pilots completed for June 1 and July 1, 2025 and September 1, 2026; sampled books are blocked by HTTP 429 (~23-hour Retry-After), respected.
+
+Completed M0–M4 work is preserved. M5-T1 now produces deterministic, evidence-bound calibration rows through C++ queue replay and copied checkpoints; missing ADV days, rejected/stale volume reports and unmatched book/reference hashes fail admission. No impact coefficient, Bayesian gate, backtest, Sharpe or research capacity has been fitted yet. Final broad offline suite: 355 passed, 10 network deselected; C++: 85 passed. Focused calibration/queue tests: 29 passed. Five calibration/ADV guard mutations and three price causality/grid/checksum mutations were detected. Rebuilt queue sanitizer executable passed 547 assertions / 9 cases under process-only ASLR disabling; Catch discovery still hits the documented platform mapping issue. October 10 trades are rejected for both (BTC 6.59%, SOL 6.75% volume deficits), and SOL tick estimates disagree across early/late windows; no guards were bypassed. BTC grid evidence was refreshed. The overall corpus report fails partial trade-window/continuity coverage, as expected. Final admitted trade totals: 11,122,305 BTC rows and 9,432,157 SOL rows over four days each; each of the four price series has 701,280 minute bars. `data/btc-sol/reports/study-status.json` records expected/missing days and verifies all price-output hashes. These are source records, not a claim that book events passed through the research queue.
 
 ## 2026-10-08 — pre-push documentation audit and server handoff
 

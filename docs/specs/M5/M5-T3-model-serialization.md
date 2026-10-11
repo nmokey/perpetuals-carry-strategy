@@ -1,7 +1,7 @@
 # M5-T3 — Model serialization
 
 **Milestone:** M5
-**Status:** Draft
+**Status:** Implemented 2026-10-09; synthetic verification complete, BTC/SOL exports data-gated
 **Depends on:** M5-T2
 **Design doc:** Section 4.5, Section 5 (M5)
 
@@ -87,3 +87,32 @@ presence of licensed data.
 Recommendation: one per symbol. Symbols are fitted independently, arrive at different times, and
 M8's comparison reads them side by side; a single file would make a re-fit of one symbol touch
 every symbol's provenance.
+
+## Implemented contract (2026-10-09)
+
+`python/perpcarry/models/impact_model_io.py` provides `from_fit_report`, `save`, `load`,
+and explicit `law` lookup. Schema 1 stores evaluated laws per symbol, side, schedule,
+depth and training-only size regime. Square-root remains primary; linear and power
+diagnostics retain their identity. No best-score selection or missing-stratum fallback
+occurs. Negative coefficients and their unusable flags survive serialization.
+
+Provenance includes the exclusive chronological boundaries, supporting corpus days,
+fit date, Git revision plus working-tree fitting-source SHA-256, and calibration
+manifest hashes. Row totals count only all-size square-root strata once; bins and
+diagnostic forms overlap and must not be summed as unique events. Each fit records
+train/test counts, dates, size bounds and edges, signed-target counts and beyond-depth
+row counts. Coverage/exclusion caveats and unsupported strata travel with the laws.
+Dense residuals, raw prices/book levels and report plots stay outside the artifact.
+
+Every structured object rejects missing/extra fields. Unknown versions, duplicate
+JSON keys/fit identities, nonfinite values, inconsistent units/exponents/counts and
+days crossing the split fail validation. Verified exports require manifest evidence
+for every supporting corpus day; synthetic provenance must be explicitly selected.
+Writes validate before atomically replacing a file and use standard shortest-round-trip
+JSON float encoding. Loading needs neither the calibration corpus nor a refit.
+
+The fitting CLI accepts `--model-dir models/<fold>` to export one file per symbol
+after admission/fitting. Use a separate directory per fold to retain fixed historical
+models. Only real admitted coefficients are candidates for committing; no BTC/SOL
+artifact is fabricated while the calibration corpus remains unavailable. This task
+implements serialization, not validation of annual capacity or strategy performance.

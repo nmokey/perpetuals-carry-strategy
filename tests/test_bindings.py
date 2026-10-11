@@ -35,6 +35,13 @@ EXPECTED_SYMBOLS = {
     "Side",
     "dump_csv",
     "version",
+    "OrderSide",
+    "Fill",
+    "SlicedFill",
+    "SliceSchedule",
+    "simulate_market_order",
+    "simulate_sliced_execution",
+    "simulate_sliced_execution_from_state",
 }
 
 # One side of a small book, defined here and used to derive every expectation below.

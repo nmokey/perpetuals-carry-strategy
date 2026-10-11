@@ -16,18 +16,58 @@ When an OD is resolved, update both the table below *and* the Status line in the
 |---|---|---|---|
 | OD-1 | Exchange/venue selection | **RESOLVED 2026-08-12** — Binance USD-M | M1 |
 | OD-2 | Historical L2 book acquisition | **RESOLVED 2026-08-12** — Tardis free tier (option d) | M1-T3 → everything downstream |
-| OD-3 | Symbol selection | OPEN (deliberately deferred to M8) | M8-T2 |
+| OD-3 | Symbol selection | **RESOLVED 2026-10-08** — BTCUSDT and SOLUSDT, D-026 | M8-T2 |
 | OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
 | OD-5 | Book reconstruction fidelity | **RESOLVED 2026-08-22** — L2, see D-017 | M2-T1 |
 | OD-6 | Concurrency model | **RESOLVED 2026-08-29** — (b) single-threaded core + SPSC queue, see D-020 | M3-T2 |
-| OD-7 | Impact model functional form | **RESOLVED 2026-08-30** — fit both, report per size regime, see D-024 | M5-T2 |
-| OD-8 | Bayesian inference method | OPEN, leaning closed-form conjugate | M6-T2 |
-| OD-9 | Entry/exit threshold policy | OPEN, leaning credible-interval | M7-T1 |
-| OD-10 | Position sizing / capacity model | OPEN, leaning capacity-curve | M7-T2, M8-T3 |
+| OD-7 | Impact model functional form | **UPDATED 2026-10-08** — primary square-root, linear diagnostic; D-026 retains D-024 caveats | M5-T2 |
+| OD-8 | Bayesian inference method | **RESOLVED 2026-10-08** — closed-form Bayesian AR(1), D-026 | M6-T2 |
+| OD-9 | Entry/exit threshold policy | **ENGINEERING RESOLVED 2026-10-10** — configurable Bayesian cost-adjusted gate and fixed-horizon exits, D-035; dated research parameter selection pending | Headline runs |
+| OD-10 | Position sizing / capacity model | **ENGINEERING RESOLVED 2026-10-10** — constrained net-dollar optimum and separate supported break-even capacity, D-036 | Research evidence still gated |
 | OD-11 | Fee & funding settlement assumptions | **RESOLVED 2026-08-12** — fee as swept parameter + dated base-case table | M7-T4 |
-| OD-12 | Backtest validation methodology | OPEN, leaning walk-forward | M7-T3 |
+| OD-12 | Backtest validation methodology | **RESOLVED 2026-10-08** — common 12-month walk-forward window, D-026 | M7-T3 |
 | OD-13 | Build tooling | **RESOLVED 2026-08-12** — see D-001 | M0 |
 | OD-14 | Data storage format | **RESOLVED 2026-08-12** — Parquet/PyArrow, DuckDB optional | M0-T4, M1 |
+
+## D-025 — Bounded server rebuild and calibration gates (2026-10-08)
+
+**Acquisition target superseded by D-026 later on 2026-10-08.** Retain its engineering work and
+calibration gates, but do not resume the `0GUSDT` research backfill.
+
+Rebuild from archives, with no transfer from the old machine. Start with `0GUSDT` trades/funding
+2025-11 through 2026-09 and paired first-of-month book days 2025-12 through 2026-09. October 10's
+daily and monthly archives independently reproduce the volume shortfall, so October stays out of
+the accepted corpus. Ten book days are a target, not a claim of quality-checked coverage.
+BTC is a daily-ingest sizing pilot; this does not resolve OD-3's final study-symbol selection.
+
+M5-T1 requires content-matched quality reports, exact volume reconciliation for every prior ADV
+day and the sampled day, and full-day independent book replay. It rejects missing days and
+allowlisted failures. Sampling rounds the event grid to completed exchange milliseconds; sliced
+simulation copies the entry replayer, including its snapshot-boundary state, and consumes future
+updates only at each slice. This avoids rebuilding the whole prefix for every size while retaining
+the M4 depletion and resync rules. Parameters and source/extension hashes travel with the dataset.
+
+See `server-workflow.md` for reproduction commands and server-specific sanitizer handling.
+
+## D-026 — BTC/SOL study scope and coverage before acquisition (2026-10-08)
+
+The user fixes BTCUSDT/SOLUSDT, primary square-root impact regression, rolling Bayesian AR(1)
+persistence gating, %ADV/notional capacity and gross/net-of-cost Sharpe. Stop `0GUSDT` expansion
+and keep completed data for tests. The four quoted capacity/Sharpe/event figures are hypotheses.
+
+Choose 2025-10-01 through 2026-09-30 as the common twelve-month scored window, preceded by
+July–September warm-up and June volume prehistory. Calendar selection precedes fitting and
+performance inspection. Archive probes establish availability, not completeness. Resolve OD-3,
+OD-7's primary form, OD-8's initial inference method and OD-12; OD-9's threshold/horizon/exit details
+and OD-4/OD-10's accounting/sizing decisions remain open.
+
+Monthly sample books are full-day feeds on only 12 scored days per symbol. Full daily L2 replay
+needs additional historical access; a continuous public-data backtest with inferred cost estimates
+must be labeled separately. The user is choosing headline execution fidelity. Continue funding,
+price, trade and sampled-book acquisition/validation independently. Preserve M0–M4 and route M5
+reconstruction through the existing SPSC queue before isolated cost simulation.
+
+See `btc-sol-study.md` and `config/btc-sol-study.toml` for the exact coverage and claims ledger.
 
 ---
 
@@ -648,3 +688,203 @@ large-order end with the same confidence as the small.
 **Not a finding yet.** Six discrete sizes, one symbol, one day, means rather than a fit, and against
 the wrong reference price for this purpose. It is enough to establish that the comparison is worth
 running and that a single form will not win outright; it is not the answer M5-T2 produces.
+
+## D-027 — Preserve the fixed window when BTC/SOL data fail admission (2026-10-08)
+
+Both 2025-10-10 daily trade archives fail exact volume/ID integrity checks. Retain checksum-verified sources for diagnostics but do not store them as accepted trades, allowlist the defects, relax tolerance or move the study dates. If recovery fails, evaluate a separately documented alternative ADV source before changing the trade-derived contract. SOL early/late inferred tick grids disagree; preserve the metadata combiner's rejection and require dated regimes rather than pooling into a timeless finest tick. BTC metadata agrees across three study-spanning dates and its evidence is refreshed. Sampled-book 429 Retry-After is respected; it does not change the independent daily-access decision.
+
+## D-028 — Record execution alternatives without selecting one (2026-10-08)
+
+The user requested a record of the discussed considerations, options and tradeoffs. Added
+`btc-sol-data-options.md` and linked it from the study plan. Book reconstruction uses snapshots
+and incremental book updates; executions alone cannot recover additions/cancellations. Tardis
+alone can support a sampled-day execution study, while %ADV and carry need additional volume,
+funding and price coverage. Existing Binance histories remain useful without merging trades
+into book replay.
+
+Full-year historical L2 access, sampled-book inferred costs, sampled-day execution, funding/price
+cost-sensitivity prototypes and prospective collection are documented as alternatives. One-day
+fits are pilots; later time-block and whole-day tests are required before generalization claims.
+Tardis's free live software runs locally and connects to exchange feeds, so it does not resolve
+this server's restricted snapshot endpoint or provide the missing historical year.
+
+**No research mode was selected.** The common window, pending headline coverage, trade-derived
+ADV contract, BTC/SOL scope, preserved 0G testing data and untested numerical claims are unchanged.
+Adopting bar-volume ADV or an inferred-cost headline requires an explicit documented choice.
+
+## D-029 — M5-T2 fit boundaries, regimes and signed targets (2026-10-09)
+
+Implemented equal eligible-row weighting and pooled fits with per-training-day coefficient
+diagnostics; separate symbol/side/schedule/depth fits. Explicit training/test date cutoffs
+prevent later data from shifting a prior fold. Default training is the prior 90 calendar
+days. Size bins use training-only quantiles of unique ADV fractions, not claimed market
+regime breakpoints. Square-root remains primary; linear and log-OLS power are diagnostic.
+Power fitting counts nonpositive targets omitted from logs but evaluates all held-out
+targets in original bps. Crossed/exhausted rows are explicitly excluded.
+
+Signed slippage is retained without clipping: price changes can favor sliced fills, and
+a synthetic C++ static walk at 123.45 for 0.0001 quantity measured approximately
+-1.15e-12 bps from floating arithmetic. Negative fitted cost coefficients are reported
+and flagged as unsuitable for a nonnegative impact law. Undefined R², missing regimes
+and too few days do not become flattering diagnostics or fallback coefficients.
+
+Calibration admission binds manifests, Parquet hashes and current source quality evidence.
+Read fragments directly without inferring Hive schema from paths, and check read stability.
+Residual artifacts stay ignored; M5-T3 remains responsible for versioned model save/load.
+The implemented fitting code is tested with synthetic laws; actual BTC/SOL fits remain
+blocked by missing eligible calibration partitions. Headline coverage choice and ADV
+source contract are unchanged.
+
+## D-030 — Strict per-symbol impact artifacts and explicit fold retention (2026-10-09)
+
+Adopt M5-T3's one-file-per-symbol JSON recommendation, with schema 1 and no migrations.
+Separate fold directories retain immutable inputs for later backtests; the fitting CLI
+exports only when `--model-dir` is supplied. No fabricated BTC/SOL coefficient file is
+committed to demonstrate the loader. Synthetic fixtures explicitly identify provenance.
+
+Store evaluated coefficients with depth/size identities, signed-target usability,
+source hashes, fitting date/code revision, train/test days/counts and limitations.
+Unavailable strata remain coverage caveats, never fallback coefficients. Summed
+provenance counts cover all-size square-root strata once; diagnostic forms and size
+bins overlap. Loading validates exact nested fields and numeric/chronological
+consistency without accessing raw data or refitting. Model selection and causal
+application to strategy decisions remain M7 responsibilities.
+
+## D-031 — Library helpers own ingestion/replay evidence; tools orchestrate (2026-10-09)
+
+Research and ingestion libraries must not import command-line tools. Extract reusable
+book partition discovery/schema, ordered Parquet streaming, batch conversion, content
+hashing and UTC calendar helpers into their owning library modules. Existing public
+tool/helper imports can remain aliases for compatibility; new callers use the library.
+Corpus reports consume calibration admission without a reverse dependency cycle.
+
+Statistical fitting and fixed-model loading must import without the C++ replay extension;
+only calibration admission imports the C++-dependent generator. Offline architecture
+tests enforce both rules. Keep code/schema behavior stable during organization cleanup;
+defer broad validation-module splits until growth warrants them and preserve check order.
+
+## D-032 — Funding EDA is descriptive; prior windows remain separate (2026-10-09)
+
+M6-T1 uses the complete funding-specific corpus/evidence, independently of blocked
+book/ADV calibration. Keep original timestamps and declared intervals; separate
+contiguous constant-cadence segments rather than pooling unequal settlement lags.
+Use predeclared 24-lag ACF/PACF, intercept-only ADF/AIC and KPSS/auto with 5% significance.
+Record both opposing nulls and KPSS table bounds. Short/constant cases are unavailable.
+
+Full-warmup/full-study diagnostics describe data; they cannot tune historical priors,
+thresholds or model orders. Monthly diagnostics use the 90 days strictly before each
+cutoff. Neither stationarity non-rejection nor lag-one correlation establishes AR(1)
+adequacy. Preserve signed funding tails, censored positive-run caveats and the distinction
+between simple fixed-notional funding sums and actual strategy P&L. M6-T2/T3 own Bayesian
+fitting, posterior checks and rolling forecasts.
+
+## D-033 — Conjugate funding baseline and explicit adequacy failure (2026-10-09)
+
+M6-T2 models settlement bps as intercept plus phi times previous settlement plus Gaussian
+innovation. Condition on the first observation; use a joint Normal-Inverse-Gamma prior
+(mean zero, precision I, shape 3, scale 2 bps²) and exact coefficient/variance updates.
+The prior is proper and configurable in the library, not estimated from the study year.
+Preserve phi outside the stationary interval and report its probability; no clipping,
+long-run mean assumption or silent cadence pooling. The diagnostic command rejects cadence
+changes; causal regime resets belong to M6-T3.
+
+Separate in-sample conditional replication (fixed observed lag design, shared joint draws)
+from frozen warmup-posterior, one-step holdout diagnostics. Report all coverage, residual
+ACF/PIT and negative-tail checks without selecting a favorable metric or refitting until
+it passes. Synthetic correctness is not empirical adequacy. Warmup checks are plausible,
+but study uncertainty is undercalibrated; this does not block building T3's rolling logic,
+and it does prevent calling the model a validated strategy gate. Prior sensitivity and
+causal predictive calibration remain required before downstream strategy claims.
+
+## D-034 — Causal rolling funding and recursive horizon checks (2026-10-10)
+
+M6-T3 refits the conjugate model on observed settlements in a timestamp-based 90-day
+window, each settlement, rather than reusing posteriors as priors or subtracting unstable
+quadratic sufficient statistics. Retain at least 30 settlements within one cadence regime.
+Reject ordering/gap defects without state mutation; cadence changes clear the old segment
+and require fresh history. A decision cannot predate admitted history or be stale by more
+than one cadence plus five seconds. One instance represents one symbol. Historical
+availability assumes the observation is known when update is called; event time alone
+does not prove a live-feed latency contract.
+
+Cumulative forecasts recursively simulate joint parameter/variance draws fixed per path
+and independent innovations per future step. Horizon is a count of settlements. Preserve
+unrestricted phi, explicit nonfinite failure, fixed-notional fraction units, seed and
+approximate probability Monte Carlo error. Finite sample moments do not establish
+existence of all long-horizon theoretical moments.
+
+Predict before admitting the current settlement, score realized funding in a separate
+retrospective pass. Diagnostic horizons 3 and 21 represent one day/week only at current
+8h cadence; these are not OD-9 holding choices. Exclude incomplete/cadence-crossing
+outcomes and report the counts. Compare frozen and rolling fits using identical initial
+history; reset the comparator on regime change. Prior variance/precision variants are
+predeclared sensitivity checks, not a default selection based on holdout outcomes.
+
+Rolling one-step calibration improves but cumulative weekly checks fail. Keep B-012
+open; M6 engineering completion does not certify a strategy gate or close OD-9.
+
+## D-035 — Cost-adjusted carry decisions and admission (2026-10-10)
+
+Resolve OD-9 mechanics as a configurable short-perp/long-spot policy. Require explicit
+holding-settlement count, entry probability and lower continuation probability; no
+headline parameter set is selected from M6 study results. Historical policy selection must
+use information preceding the scored run. Test choices (3, 0.8, 0.5) exercise branches only.
+
+Enter when both P(cumulative funding > entry + terminal close + financing) strictly exceeds
+the entry threshold and expected net funding is positive. For held positions retain the
+original horizon and subtract actual settlements held; never reset it on a new decision.
+Continue against the alternative of closing now: hurdle = terminal close - close now +
+remaining financing. Sunk entry costs and realized funding do not enter that comparison.
+Exit intent on maturity, cadence change, unavailable/unadmitted evidence, nonpositive
+expected incremental edge or probability at/below continuation threshold. Intents do not
+execute orders, change position state or claim successful closure without data.
+
+Bind M6 predictions to symbol and model/configuration digest (inference sources, prior,
+rolling window, minimum history). Require matching past adequacy evidence, cadence,
+horizon and expiry. Approval is caller-supplied evidence, not an automatically certified
+verdict; no real BTC/SOL approval exists while B-012 is open. Deterministic Monte Carlo
+probabilities remain approximations, and synthetic branches establish mechanics only.
+
+M5 cost adapter requires both nonnegative square-root sell/open and buy/close laws,
+explicit supported schedule/size stratum and caller-declared inside-validated order depth.
+Reject extrapolated size, missing law, future validation evidence and changed artifact
+hash. Full held-out end, not just training cutoff, must precede the historical decision.
+File generation date records reproducibility, not simulated information availability.
+Add touch-relative impact, half-spread, fees and explicit hedge costs once; convert bps
+by 10,000. No flat-cost fallback. Synthetic admission defaults off in both adapter and
+strategy. Caller owns dated fee/spread/hedge/depth inputs and admitted ADV/notional.
+
+Terminal close initially uses today's close-cost estimate (stationary costs); the pure
+interface accepts another estimate known at decision time. Never use the realized future
+book to choose an entry. Sizing/metadata/ADV admission belongs to T2; actual fills, funding
+cashflows, changing exposure and capital accounting belong to T3/T4. OD-4, OD-10 and
+B-009–B-012 remain open. This completes T1 engineering, not M7 or a profitable backtest.
+
+## D-036 — Marginal-impact sizing and executable capacity bounds (2026-10-10)
+
+Resolve OD-10 by maximizing expected net funding dollars for a flat short-perp/long-spot
+candidate. With base-ADV fraction x, notional N=P*A*x, summed square-root coefficient K
+in fraction units, expected cumulative funding mu and fixed proportional costs b,
+profit=N*(mu-b-K*sqrt(x)). Marginal cost is b+1.5*K*sqrt(x), not average impact. Continuous
+optimum [(mu-b)/(1.5*K)]^2 and zero-profit root [(mu-b)/K]^2 answer different questions.
+
+Restrict executable lots to both sides' common calibrated range, explicit validated
+liquidity, maximum notional/ADV fraction, dated contract minima and Decimal lot step.
+Binary search the largest size passing the unchanged T1 entry gate; compare adjacent
+lots around the bounded continuous optimum. Choose smaller on an exact profit tie and
+zero when no feasible profitable admitted lot exists. Zero impact still has finite caps.
+Report chosen size, feasible maximum and supported break-even separately in ADV and
+notional. Label outside-support roots without extrapolating capacity. An external cap
+is not a measurement of true economic capacity, and expected dollars are not realized P&L.
+
+Shared `costs.load_curve`/`from_curve` retain T1 provenance, chronology and support checks
+without repeated disk loads. Charges are explicit, including hedge costs; terminal close
+uses today's costs. `SizingInputs` carries caller-admitted complete prior 30-day UTC base
+ADV and dated contract evidence/digests. The validated quantity cap covers entry and the
+modeled close envelope, without guaranteeing future depth. No loader certifies manually
+supplied hashes or manufactures BTC/SOL metadata, fits or funding approval. B-009–B-012
+and OD-4 stay open; dated policy selection and real-input admission remain research gates.
+
+Correct the existing accounting sequencing defect: T4 depends on T1/T2 and OD-11 and
+precedes T3; T3 depends on T2/T4 and OD-12. Task IDs and acceptance criteria are retained.
+Next is hand-reconciled T4 accounting, then T3 walk-forward integration.

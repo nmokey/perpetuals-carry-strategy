@@ -67,6 +67,10 @@ class Pipeline {
   const OrderBook& book() const { return replayer_.book(); }
   const BookReplayer::Stats& stats() const { return replayer_.stats(); }
 
+  // Copy the completed consumer state for cost simulation. Includes snapshot-boundary
+  // state, but never exposes a mutable alias to the threaded pipeline's owner.
+  BookReplayer replay_state() const { return replayer_; }
+
  private:
   std::size_t queue_capacity_;
   BookReplayer replayer_;

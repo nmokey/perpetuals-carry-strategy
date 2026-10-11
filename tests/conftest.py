@@ -21,3 +21,28 @@ def isolated_data_root(tmp_path, monkeypatch):
     root.mkdir()
     monkeypatch.setenv(DATA_ROOT_ENV_VAR, str(root))
     return root
+
+
+@pytest.fixture
+def funding_frame_factory():
+    """Synthetic complete funding windows; never copied from exchange records."""
+    import numpy as np
+    import pandas as pd
+
+    def build(start="2025-07-01", end="2025-10-03", symbol="TESTUSDT", seed=1729):
+        times = pd.date_range(start, end, inclusive="left", freq="8h", tz="UTC")
+        innovations = np.random.default_rng(seed).normal(0.00002, 0.000005, len(times))
+        rates = innovations.copy()
+        for i in range(1, len(rates)):
+            rates[i] += 0.65 * rates[i - 1]
+        return pd.DataFrame(
+            {
+                "funding_time": times.as_unit("ms").asi8 + 137,
+                "symbol": symbol,
+                "funding_rate": rates,
+                "funding_interval_hours": 8,
+                "date": times.strftime("%Y-%m-%d"),
+            }
+        )
+
+    return build

@@ -8,7 +8,7 @@ files ad hoc for exploration.
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -91,3 +91,17 @@ def read_parquet(
     dataset = ds.dataset(path, format="parquet", partitioning="hive")
     table = dataset.to_table(columns=list(columns) if columns else None, filter=filters)
     return table.to_pandas()
+
+
+def iter_parquet_batches(
+    files: Sequence[Path], columns: Sequence[str], batch_size: int
+) -> Iterator[pa.RecordBatch]:
+    """Stream row batches in file order.
+
+    Order is load-bearing and invisible in the schema: this feed carries no sequence
+    number (design doc 3.2), ms timestamps tie freely, so row order *is* the sequence.
+    Reading with a single-threaded per-file iterator preserves it.
+    """
+    for path in files:
+        parquet = pq.ParquetFile(path)
+        yield from parquet.iter_batches(batch_size=batch_size, columns=columns)

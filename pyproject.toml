@@ -20,6 +20,7 @@ dependencies = [
     "polars>=1.0",
     "pyarrow>=17",
     "scikit-learn>=1.5",
+    "scipy>=1.14",
     "statsmodels>=0.14",
 ]
 

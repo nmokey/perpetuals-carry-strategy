@@ -28,51 +28,16 @@ from pathlib import Path
 import perpcarry_cpp
 
 from perpcarry.ingestion import tardis_archive as tardis
-from perpcarry.tools import export_book
-
-#: Columns the replay needs, in the order ``BookUpdate`` takes them. Taken from the
-#: exporter rather than restated: a second copy of a column list is a second source of
-#: truth that can only ever agree by luck (C15).
-EVENT_COLUMNS = export_book.EVENT_COLUMNS
+from perpcarry.ingestion.book_partitions import (
+    EVENT_COLUMNS,
+    BookPartitionError,
+    partition_files,
+)
+from perpcarry.replay import ReplayInputError as PipelineRunError
+from perpcarry.replay import updates_from_batch
+from perpcarry.storage import iter_parquet_batches
 
 DEFAULT_BATCH_SIZE = 1_000_000
-
-
-class PipelineRunError(RuntimeError):
-    """Raised when the run cannot be performed or its checkpoint cannot be evaluated."""
-
-
-def _side(value: str) -> perpcarry_cpp.Side:
-    if value == "bid":
-        return perpcarry_cpp.Side.Bid
-    if value == "ask":
-        return perpcarry_cpp.Side.Ask
-    raise PipelineRunError(f"unknown side {value!r}, expected bid or ask")
-
-
-def _updates(batch) -> list[perpcarry_cpp.BookUpdate]:
-    """Convert one PyArrow record batch to the extension's row type.
-
-    Column-at-a-time rather than row-at-a-time: ``to_pylist`` on the whole batch builds a
-    dict per row, which dominates the cost of the run for no benefit.
-    """
-    timestamps = batch.column("timestamp").to_pylist()
-    local = batch.column("local_timestamp").to_pylist()
-    snapshots = batch.column("is_snapshot").to_pylist()
-    sides = batch.column("side").to_pylist()
-    prices = batch.column("price").to_pylist()
-    quantities = batch.column("quantity").to_pylist()
-    return [
-        perpcarry_cpp.BookUpdate(
-            timestamp=timestamps[i],
-            local_timestamp=local[i],
-            is_snapshot=snapshots[i],
-            side=_side(sides[i]),
-            price=prices[i],
-            quantity=quantities[i],
-        )
-        for i in range(batch.num_rows)
-    ]
 
 
 def checkpoint_digest(book: perpcarry_cpp.OrderBook, depth: int = 25) -> str:
@@ -119,7 +84,7 @@ def run(
     depth: int = 25,
 ) -> dict:
     day = dt.date.fromisoformat(date) if isinstance(date, str) else date
-    files = export_book._partition_files(tardis.INCREMENTAL_BOOK_L2, symbol, day, root)
+    files = partition_files(tardis.INCREMENTAL_BOOK_L2, symbol, day, root)
 
     pipeline = perpcarry_cpp.Pipeline(queue_capacity=queue_capacity)
     consumed = 0
@@ -127,8 +92,8 @@ def run(
     producer_stalls = 0
     started = time.perf_counter()
 
-    for batch in export_book._iter_batches(files, EVENT_COLUMNS, batch_size):
-        result = pipeline.run(_updates(batch))
+    for batch in iter_parquet_batches(files, EVENT_COLUMNS, batch_size):
+        result = pipeline.run(updates_from_batch(batch))
         consumed += result.consumed
         peak_occupancy = max(peak_occupancy, result.peak_queue_occupancy)
         producer_stalls += result.producer_stalls
@@ -205,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             queue_capacity=args.queue_capacity,
             batch_size=args.batch_size,
         )
-    except (PipelineRunError, export_book.ExportError) as error:
+    except (PipelineRunError, BookPartitionError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

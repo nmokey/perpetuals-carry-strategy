@@ -155,3 +155,16 @@ def test_data_root_is_env_overridable(tmp_path, monkeypatch):
 
 def test_dataset_path_accepts_explicit_root(tmp_path):
     assert dataset_path("funding", root=tmp_path) == tmp_path / "funding"
+
+
+def test_streamed_fragments_preserve_supplied_file_order_and_timestamp_ties(tmp_path):
+    """Book timestamps tie across fragments; sorting/merging would change replay state."""
+    from perpcarry.storage import iter_parquet_batches
+
+    first = tmp_path / "b.parquet"
+    second = tmp_path / "a.parquet"
+    write_parquet(pd.DataFrame({"timestamp": [137, 137], "price": [100.1, 100.2]}), first)
+    write_parquet(pd.DataFrame({"timestamp": [137, 138], "price": [100.3, 100.4]}), second)
+    batches = list(iter_parquet_batches([first, second], ["timestamp", "price"], batch_size=1))
+    assert [batch.column("timestamp")[0].as_py() for batch in batches] == [137, 137, 137, 138]
+    assert [batch.column("price")[0].as_py() for batch in batches] == [100.1, 100.2, 100.3, 100.4]

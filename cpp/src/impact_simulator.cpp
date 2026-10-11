@@ -160,14 +160,24 @@ void validate_schedule(double total_quantity, const SliceSchedule& schedule) {
 
 SlicedFill simulate_sliced_execution(std::span<const BookUpdate> updates, OrderSide side,
                                      double total_quantity, const SliceSchedule& schedule) {
+  return simulate_sliced_execution_from_state(BookReplayer{}, updates, side, total_quantity, schedule);
+}
+
+SlicedFill simulate_sliced_execution_from_state(const BookReplayer& initial,
+                                                std::span<const BookUpdate> updates,
+                                                OrderSide side, double total_quantity,
+                                                const SliceSchedule& schedule) {
   validate_schedule(total_quantity, schedule);
+  if (initial.stats().applied > 0 && initial.stats().last_timestamp > schedule.start_timestamp) {
+    throw std::invalid_argument("initial replay state is later than sliced execution entry");
+  }
 
   SlicedFill result;
   result.parent.requested_quantity = total_quantity;
   result.slices.reserve(schedule.slices);
 
   const std::vector<double> sizes = slice_quantities(total_quantity, schedule);
-  BookReplayer replayer;
+  BookReplayer replayer = initial;
   std::size_t cursor = 0;
   const std::int64_t n = static_cast<std::int64_t>(schedule.slices);
 

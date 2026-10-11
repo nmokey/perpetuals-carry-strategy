@@ -147,6 +147,14 @@ struct SlicedFill {
 SlicedFill simulate_sliced_execution(std::span<const BookUpdate> updates, OrderSide side,
                                      double total_quantity, const SliceSchedule& schedule);
 
+// Calibration already replayed to entry. Copy that state, including snapshot-block state,
+// rather than replaying the whole day's prefix for every size. Future updates must follow
+// the initial state; the caller's replayer is never mutated.
+SlicedFill simulate_sliced_execution_from_state(const BookReplayer& initial,
+                                                std::span<const BookUpdate> future,
+                                                OrderSide side, double total_quantity,
+                                                const SliceSchedule& schedule);
+
 }  // namespace perpcarry
 
 #endif  // PERPCARRY_IMPACT_SIMULATOR_HPP

@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
-from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
 
@@ -23,6 +22,7 @@ import httpx
 import pandas as pd
 
 from perpcarry.ingestion import binance_archive as archive
+from perpcarry.ingestion.calendar import months_between as months_between
 from perpcarry.ingestion.download import DownloadError, cached_fetch, extract_csv, fetch_checksum
 from perpcarry.storage import data_root, write_parquet
 
@@ -223,14 +223,6 @@ def store(frame: pd.DataFrame, *, root: Path | None = None) -> Path:
     """
     dest = (root if root is not None else data_root()) / STORAGE_DIR
     return write_parquet(frame, dest, partition_cols=PARTITION_COLS)
-
-
-def months_between(start: dt.date, end: dt.date) -> Iterator[dt.date]:
-    """First-of-month dates covering ``[start, end]``."""
-    cursor = start.replace(day=1)
-    while cursor <= end:
-        yield cursor
-        cursor = (cursor.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
 
 
 def backfill(

@@ -9,6 +9,15 @@ only if the project's purpose genuinely changes.
 > realistically modeled slippage and fees — and how does that answer change with order size and
 > market liquidity?
 
+The active study fixes **BTCUSDT and SOLUSDT** over **2025-10-01 through 2026-09-30**, with
+strictly prior warm-up and walk-forward calibration. Its primary impact model is a fitted
+square-root law; entry uses rolling Bayesian AR(1) funding persistence. Capacity is reported in
+%ADV and USDT notional alongside gross and net-of-cost Sharpe. See `btc-sol-study.md`.
+
+The proposed 0.04% ADV / $210K capacity, 0.8 net Sharpe, 2.1 gross Sharpe and 400M+ processed
+events are hypotheses to test, never outcomes to force. Existing `0GUSDT` evidence validates
+engineering only and does not establish BTC/SOL strategy performance.
+
 ## What makes this project worth doing
 
 The execution cost model is **calibrated from real order book data, not assumed**, and it

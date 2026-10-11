@@ -1,7 +1,7 @@
 # M5-T1 — Calibration dataset generation
 
 **Milestone:** M5
-**Status:** Draft
+**Status:** Implemented 2026-10-08; BTC/SOL real-data calibration eligibility pending
 **Depends on:** M4-T3 (complete 2026-08-30). No open design decision gates this task.
 **Design doc:** Section 4.5, Section 5 (M5)
 
@@ -12,9 +12,7 @@ This is the task that turns a simulator into data. Everything downstream — the
 the entry threshold, the capacity curve — is a function of this dataset, so its coverage bounds what
 the project can honestly claim more tightly than any modelling choice does.
 
-**Nothing has been kept yet.** M4's probe simulated 1,554 static fills and 480 sliced runs and
-retained *aggregates* — rates and means. There is currently no row-level dataset anywhere in the
-project. That is this task.
+The server implementation writes deterministic row-level Parquet and an evidence manifest. It advances C++ replay through the lock-free Pipeline, copies consumer state, and simulates static and sliced execution without advancing the entry book using future data. Complete prior ADV, exact volume reconciliation, and hash-bound full-day independent book validation are mandatory. Existing 0G engineering data remain useful for testing; active calibration is BTC/SOL under `docs/btc-sol-study.md`.
 
 ## Acceptance criteria
 
@@ -119,7 +117,7 @@ its fit and M9 can caveat the large-order end specifically rather than globally.
 ## Out of scope
 
 - Fitting anything — **M5-T2**.
-- Choosing which symbols to study — **OD-3**, deliberately deferred to M8.
+- Changing research symbols — **OD-3** is resolved to BTCUSDT/SOLUSDT.
 - Pulling more corpus days. Prerequisite for M5-T2's criterion to be meaningful; tracked in
   `blockers.md`, not solved here.
 
@@ -128,7 +126,7 @@ its fit and M9 can caveat the large-order end specifically rather than globally.
 **Q1 — how many sizes, over what range?**
 Recommendation: ~40 log-spaced points from 0.001% to 10% of ADV, so the sweep is expressed in the
 units M8 compares in and automatically adapts to a symbol's liquidity. Fixing base units instead
-would make `BTCUSDT` and `0GUSDT` sweeps incomparable, which is the problem M4-T3 exists to solve.
+would make `BTCUSDT` and `SOLUSDT` sweeps incomparable, which is the problem M4-T3 exists to solve.
 
 **Q2 — how many instants per day?**
 Recommendation: start at M4's every-5,000-events (259 instants/day for `0GUSDT`) and raise it once

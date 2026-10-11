@@ -80,6 +80,29 @@ def test_the_pipeline_completes_and_consumes_everything():
     assert pipeline.stats().applied == len(batch)
 
 
+def test_simulation_checkpoint_is_a_copy_and_preserves_replay_state():
+    pipeline = perpcarry_cpp.Pipeline(queue_capacity=2)
+    batch = synthetic_day(levels=3, updates=5)
+    pipeline.run(batch)
+    before = digest(pipeline.book())
+    copied = pipeline.replay_state()
+    assert digest(copied.book()) == before
+    copied.apply_batch(
+        [
+            perpcarry_cpp.BookUpdate(
+                timestamp=batch[-1].timestamp + 1,
+                is_snapshot=True,
+                side=perpcarry_cpp.Side.Ask,
+                price=300.0,
+                quantity=4.0,
+            )
+        ]
+    )
+    assert copied.book().best_bid() is None  # resync follows a diff, so the old book clears
+    assert digest(pipeline.book()) == before
+    assert pipeline.stats().applied == len(batch)
+
+
 def test_threading_changes_timing_never_results():
     """M3-T3 test 3 -- the one that would catch a real regression.
 

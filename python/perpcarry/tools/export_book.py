@@ -26,25 +26,23 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.csv as pa_csv
-import pyarrow.parquet as pq
 
 from perpcarry import storage
 from perpcarry.ingestion import fetch_book
 from perpcarry.ingestion import tardis_archive as tardis
-
-#: Column order written to the events CSV. The validator checks the header it reads
-#: against its own copy of this list and refuses a file that disagrees, so a change here
-#: surfaces as a clear error rather than as silently misparsed columns.
-EVENT_COLUMNS = ["timestamp", "local_timestamp", "is_snapshot", "side", "price", "quantity"]
+from perpcarry.ingestion.book_partitions import (
+    EVENT_COLUMNS,
+    partition_files,
+)
+from perpcarry.ingestion.book_partitions import (
+    BookPartitionError as ExportError,
+)
+from perpcarry.storage import iter_parquet_batches
 
 #: Column order written to the reference CSV.
 REFERENCE_COLUMNS = ["timestamp", "side", "level", "price", "quantity"]
 
 DEFAULT_BATCH_SIZE = 1_000_000
-
-
-class ExportError(RuntimeError):
-    """The corpus does not hold what was asked for."""
 
 
 @dataclass(frozen=True)
@@ -78,31 +76,6 @@ def _resolve_out_dir(symbol: str, date: str, root: Path | None, out_dir: Path | 
     return base / "validation" / f"symbol={symbol}" / f"date={date}"
 
 
-def _partition_files(dataset: str, symbol: str, date: dt.date, root: Path | None) -> list[Path]:
-    """Locate a partition through the writer's own path helper, never a restated layout.
-
-    Restating where ``fetch_book`` puts things is how M1-T4 shipped a validator that
-    looked in a directory which had never existed and reported the corpus healthy (C15).
-    """
-    directory = fetch_book.partition_path(dataset, symbol, date, root)
-    files = sorted(directory.glob("*.parquet"))
-    if not files:
-        raise ExportError(f"no {dataset} partition for {symbol} {date} at {directory}")
-    return files
-
-
-def _iter_batches(files: list[Path], columns: list[str], batch_size: int):
-    """Stream row batches in file order.
-
-    Order is load-bearing and invisible in the schema: this feed carries no sequence
-    number (design doc 3.2), ms timestamps tie freely, so row order *is* the sequence.
-    Reading with a single-threaded per-file iterator preserves it.
-    """
-    for path in files:
-        parquet = pq.ParquetFile(path)
-        yield from parquet.iter_batches(batch_size=batch_size, columns=columns)
-
-
 def export(
     symbol: str,
     date: dt.date | str,
@@ -121,8 +94,8 @@ def export(
     events_path = destination / "events.csv"
     reference_path = destination / "reference.csv"
 
-    event_files = _partition_files(tardis.INCREMENTAL_BOOK_L2, symbol, day, root)
-    reference_files = _partition_files(tardis.BOOK_SNAPSHOT_25, symbol, day, root)
+    event_files = partition_files(tardis.INCREMENTAL_BOOK_L2, symbol, day, root)
+    reference_files = partition_files(tardis.BOOK_SNAPSHOT_25, symbol, day, root)
 
     events = 0
     last_timestamp = 0
@@ -141,7 +114,7 @@ def export(
     budget_end: int | None = None
 
     with pa_csv.CSVWriter(events_path, event_schema) as writer:
-        for batch in _iter_batches(event_files, EVENT_COLUMNS, batch_size):
+        for batch in iter_parquet_batches(event_files, EVENT_COLUMNS, batch_size):
             timestamps = batch.column("timestamp").to_pylist()
 
             over_budget = max_events is not None and events + len(timestamps) > max_events
@@ -182,7 +155,7 @@ def export(
     )
 
     with pa_csv.CSVWriter(reference_path, reference_schema) as writer:
-        for batch in _iter_batches(reference_files, REFERENCE_COLUMNS, batch_size):
+        for batch in iter_parquet_batches(reference_files, REFERENCE_COLUMNS, batch_size):
             timestamps = batch.column("timestamp").to_pylist()
             # The reference is sorted by timestamp on ingest (D-014), so once it passes the
             # last exported event there is nothing further that can be compared.

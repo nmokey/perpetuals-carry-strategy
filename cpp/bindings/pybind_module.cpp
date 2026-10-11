@@ -36,6 +36,7 @@
 #include "perpcarry/book_debug.hpp"
 #include "perpcarry/book_replayer.hpp"
 #include "perpcarry/order_book.hpp"
+#include "perpcarry/impact_simulator.hpp"
 #include "perpcarry/pipeline.hpp"
 #include "perpcarry/version.hpp"
 
@@ -168,6 +169,8 @@ PYBIND11_MODULE(perpcarry_cpp, m) {
           "Replay a batch across the ingest/replay thread boundary. One crossing per "
           "batch, never per event (Risk R4).")
       .def("book", &Pipeline::book, py::return_value_policy::reference_internal)
+      .def("replay_state", &Pipeline::replay_state,
+           "Copy completed consumer replay state for isolated slippage simulation.")
       .def("stats", &Pipeline::stats, py::return_value_policy::reference_internal);
 
   py::class_<BookReplayer>(m, "BookReplayer")
@@ -185,4 +188,56 @@ PYBIND11_MODULE(perpcarry_cpp, m) {
       // replayer` would leave Python reading freed memory.
       .def("book", &BookReplayer::book, py::return_value_policy::reference_internal)
       .def("stats", &BookReplayer::stats, py::return_value_policy::reference_internal);
+
+  py::enum_<perpcarry::OrderSide>(m, "OrderSide")
+      .value("Buy", perpcarry::OrderSide::Buy)
+      .value("Sell", perpcarry::OrderSide::Sell);
+
+  py::class_<perpcarry::Fill>(m, "Fill")
+      .def_readonly("requested_quantity", &perpcarry::Fill::requested_quantity)
+      .def_readonly("filled_quantity", &perpcarry::Fill::filled_quantity)
+      .def_readonly("notional", &perpcarry::Fill::notional)
+      .def_readonly("average_price", &perpcarry::Fill::average_price)
+      .def_readonly("worst_price", &perpcarry::Fill::worst_price)
+      .def_readonly("mid_at_entry", &perpcarry::Fill::mid_at_entry)
+      .def_readonly("touch_at_entry", &perpcarry::Fill::touch_at_entry)
+      .def_readonly("slippage_vs_mid_bps", &perpcarry::Fill::slippage_vs_mid_bps)
+      .def_readonly("slippage_vs_touch_bps", &perpcarry::Fill::slippage_vs_touch_bps)
+      .def_readonly("levels_consumed", &perpcarry::Fill::levels_consumed)
+      .def_readonly("exhausted_book", &perpcarry::Fill::exhausted_book)
+      .def_readonly("beyond_validated_depth", &perpcarry::Fill::beyond_validated_depth)
+      .def_readonly("crossed_at_entry", &perpcarry::Fill::crossed_at_entry);
+
+  py::class_<perpcarry::SliceSchedule>(m, "SliceSchedule")
+      .def(py::init([](std::int64_t start, std::int64_t duration, std::size_t slices,
+                       std::vector<double> weights) {
+        return perpcarry::SliceSchedule{start, duration, slices, std::move(weights)};
+      }), py::arg("start_timestamp"), py::arg("duration_ms") = 10000,
+          py::arg("slices") = 5, py::arg("weights") = std::vector<double>{})
+      .def_readonly("start_timestamp", &perpcarry::SliceSchedule::start_timestamp)
+      .def_readonly("duration_ms", &perpcarry::SliceSchedule::duration_ms)
+      .def_readonly("slices", &perpcarry::SliceSchedule::slices)
+      .def_readonly("weights", &perpcarry::SliceSchedule::weights);
+
+  py::class_<perpcarry::SlicedFill>(m, "SlicedFill")
+      .def_readonly("parent", &perpcarry::SlicedFill::parent)
+      .def_readonly("slices", &perpcarry::SlicedFill::slices)
+      .def_readonly("slices_exhausted", &perpcarry::SlicedFill::slices_exhausted)
+      .def_readonly("slices_beyond_validated_depth", &perpcarry::SlicedFill::slices_beyond_validated_depth)
+      .def_readonly("slices_crossed", &perpcarry::SlicedFill::slices_crossed)
+      .def_readonly("completed", &perpcarry::SlicedFill::completed);
+
+  m.def("simulate_market_order", &perpcarry::simulate_market_order,
+        py::arg("book"), py::arg("side"), py::arg("quantity"));
+  m.def("simulate_sliced_execution", [](const std::vector<BookUpdate>& updates,
+        perpcarry::OrderSide side, double quantity, const perpcarry::SliceSchedule& schedule) {
+    py::gil_scoped_release release;
+    return perpcarry::simulate_sliced_execution(updates, side, quantity, schedule);
+  }, py::arg("updates"), py::arg("side"), py::arg("quantity"), py::arg("schedule"));
+  m.def("simulate_sliced_execution_from_state", [](const BookReplayer& initial,
+        const std::vector<BookUpdate>& future, perpcarry::OrderSide side, double quantity,
+        const perpcarry::SliceSchedule& schedule) {
+    py::gil_scoped_release release;
+    return perpcarry::simulate_sliced_execution_from_state(initial, future, side, quantity, schedule);
+  }, py::arg("initial"), py::arg("future"), py::arg("side"), py::arg("quantity"), py::arg("schedule"));
 }

@@ -33,8 +33,9 @@ import httpx
 import pandas as pd
 
 from perpcarry.ingestion import binance_archive as archive
+from perpcarry.ingestion.calendar import month_bounds as month_bounds
+from perpcarry.ingestion.calendar import months_between
 from perpcarry.ingestion.download import DownloadError, cached_fetch, extract_csv, fetch_checksum
-from perpcarry.ingestion.fetch_trades import months_between
 from perpcarry.storage import data_root, write_parquet
 
 log = logging.getLogger(__name__)
@@ -191,14 +192,6 @@ class MonthReport:
     intervals: tuple[int, ...]
     partial_start: bool
     interval_changes: tuple[tuple[int, int, int], ...]
-
-
-def month_bounds(month: dt.date) -> tuple[int, int]:
-    """``(first_ms, last_ms)`` epoch bounds of the month, in UTC."""
-    days = calendar.monthrange(month.year, month.month)[1]
-    start = dt.datetime(month.year, month.month, 1, tzinfo=dt.UTC)
-    end = start + dt.timedelta(days=days)
-    return int(start.timestamp() * 1000), int(end.timestamp() * 1000)
 
 
 def check_month(frame: pd.DataFrame, symbol: str, month: dt.date) -> MonthReport:
