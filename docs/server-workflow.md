@@ -348,3 +348,14 @@ output hashes. Decimal OHLC strings and `available_at_ms = close_time + 1` are r
 These are bars, not certified funding-charge marks; do not use their opens as exact
 settlement evidence or expose the completed close early. See
 `docs/analysis/btc-sol-mark-prices.md` for the remaining source/valuation gaps.
+
+## Monthly sample replay worker
+
+The authorized sample validation can run alongside acquisition using the local ignored
+`data/btc-sol/reports/validate-monthly-books.py` driver. Its locked worker invokes
+`tools.validate_book` once per completed update/reference pair and records
+`monthly-book-validation.json`/`.log`. It retains aggregate verdicts and fingerprints,
+and the existing validator deletes raw CSV exports after each pass. A failed replay
+stops validation; stopped acquisition leaves a visible waiting status. No extra
+archives are requested. This checks the top-25 criterion and retains timestamp ambiguity;
+it is not validation of deep books or exact venue execution timing.

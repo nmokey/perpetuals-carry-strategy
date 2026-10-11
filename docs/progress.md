@@ -22,6 +22,23 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — Monthly sample replay validation started
+
+Independent full-day C++ replay passed for BTC/SOL July 1, 2025: 119,267,326 update
+rows and 3,097,017 top-25 images combined, zero reference mismatches. Reports bind
+unchanged input hashes and preserve millisecond ambiguity categories. This validates
+the existing top-25 criterion; it does not certify deeper levels, venue timing or
+accepted-order contract filters. Counts are standalone replay events, not a claimed
+queue/calibration-throughput result or annual coverage. Generated raw CSV exports
+were deleted by the existing validator after success.
+
+Started a separate locked sequential background validator for every completed monthly
+update/reference pair, alongside acquisition. Live status/log/driver remain under
+ignored `data/btc-sol/reports/monthly-book-validation.*` and `validate-monthly-books.py`.
+The worker waits for completed pairs, reuses only hash-matching passes, stops on a
+failed replay, and exits visibly waiting if acquisition stops. No C++ changes or
+additional daily downloads. Only the two completed verdicts above are claimed here.
+
 ## 2026-10-10 — Historical fee and contract source audit
 
 Verified three official notices: SOL tick change before the study (2024-10-14),
