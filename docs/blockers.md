@@ -114,6 +114,19 @@ policy work. Gross/net equity outputs alone do not clear these gates.
 
 ### B-011 — SOL historical tick grid disagrees across windows
 
+**2026-10-10 source audit:** an official notice announced SOL 0.001→0.01 tick on
+2024-10-14, before the study. Just 28/2,245,956 July executions and 41/3,097,739
+October executions are off the 0.01 grid; these rare prices explain the finer observed
+GCD. Grandfathered orders are a possible cause, not established. Execution-price
+granularity does not identify the tick accepted for new orders, and absence of a
+later indexed notice does not prove a constant regime. A separate 2025-04-02 notice
+sets minimum quantity to 0.01 SOL but does not independently certify lot step or
+minimum notional. BTC's 100→50 USDT minimum-notional rollout starts 2026-04-14
+06:30 UTC with an approximately four-hour implementation interval. Full historical
+filters, effective timing and fees remain unadmitted. See
+`analysis/historical-fees-contracts.md`; Tardis metadata access returned 401.
+
+
 Three disjoint sampled trade windows infer tick 0.001 on 2025-07-01 and 2025-10-01, but 0.01 on 2026-09-01; all infer quantity step 0.01. The metadata combiner correctly refuses one timeless record. This is observed grid disagreement, not yet a verified venue change date. Obtain/verify the historical transition and represent dated metadata regimes before executable sizing. Do not choose the finest tick or replace the last value globally. BTC grids agree across the same dates (tick 0.1, step 0.001); its committed provenance was refreshed.
 
 ### B-004 — Binance's REST/WS API is geo-blocked from this location; Bybit too

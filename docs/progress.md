@@ -22,6 +22,21 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — Historical fee and contract source audit
+
+Verified three official notices: SOL tick change before the study (2024-10-14),
+SOL minimum trade amount reduction (2025-04-02), and BTC minimum-notional reduction
+with an approximate four-hour rollout (2026-04-14). Exact source-string modulo checks
+found only 28 and 41 early SOL executions off the announced 0.01 grid, versus zero in
+the late sample. This changes the interpretation of empirical GCD evidence; it does
+not certify accepted-order regimes or establish a grandfathered-order explanation.
+
+Added `analysis/historical-fees-contracts.md`, with URLs, aggregate evidence and explicit
+limitations. Small failure/source facts are retained under ignored historical-evidence
+reports. Tardis metadata requests returned 401/pro-business-required. Current fee
+references remain assumptions; no production fees/metadata changed or B-010/B-011
+gates cleared. Evidence hashes/counts and documentation whitespace checked.
+
 ## 2026-10-10 — Mark-price bars acquired in parallel
 
 Acquired 30 monthly and two supplemental daily Binance markPriceKlines archives:
