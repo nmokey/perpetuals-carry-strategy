@@ -22,6 +22,22 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — Mark-price bars acquired in parallel
+
+Acquired 30 monthly and two supplemental daily Binance markPriceKlines archives:
+457 days and 658,080 minute bars per symbol, July 2025–September 2026. Both June
+monthly archives omit June 29; independently checksummed daily archives repair the
+whole omitted day, with both source granularities preserved in provenance. All 914
+output hashes were rechecked. Total storage is 28.8 MB compressed plus 48.3 MB Parquet.
+Prices preserve decimal source strings and explicit bar-close availability.
+
+Added a dedicated cache/ingestion command, spec and analysis. Exact funding-charge
+marks are still unverified: bar opens are not silently admitted as settlement marks.
+The blocked funding-history API was not called. No funding-proxy policy was chosen.
+21 targeted tests passed; eight isolated faults were caught by named tests. Combined
+parallel-task targeted checks passed (62), with broader testing pending ADV changes.
+No corpus rows staged for Git or remote writes.
+
 ## 2026-10-10 — Execution scope selected by user
 
 Recorded D-039 and updated study config: use monthly-calibrated inferred execution; no

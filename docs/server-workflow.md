@@ -337,3 +337,14 @@ and its UTC deadline; rerunning before that deadline exits without contacting Ta
 Do not treat a cached archive, staged conversion, or an older study-status report as a
 replay-validated day. Refresh coverage and run the existing `tools.validate_book` workflow
 once paired partitions are ready. This batch does not acquire regular-day L2 or spot books.
+
+## Mark-price bars
+
+`uv run python -m perpcarry.ingestion.fetch_mark_prices --root data/btc-sol` acquires
+July 2025–September 2026 BTC/SOL mark-price minute bars, with published checksums and
+explicit whole-missing-day repairs from daily archives. Cache and output namespaces
+are separate from trade klines. `reports/mark-prices-status.json` records source and
+output hashes. Decimal OHLC strings and `available_at_ms = close_time + 1` are retained.
+These are bars, not certified funding-charge marks; do not use their opens as exact
+settlement evidence or expose the completed close early. See
+`docs/analysis/btc-sol-mark-prices.md` for the remaining source/valuation gaps.

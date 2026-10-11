@@ -90,6 +90,14 @@ Never describe the modeled year as observed-book replay, carry old books forward
 
 ### B-010 — Research input and accounting gates are incomplete
 
+**2026-10-10 mark-data update:** checksum-verified mark-price bars now cover all 457
+warmup/study days per symbol, with documented June 29 daily-archive repair. Exact
+funding settlement marks remain unverified; an open at the funding minute is not
+a certified charge mark. Valuation adapters must respect bar-close availability and
+explicit staleness, including the existing 16-second decision/terminal boundaries.
+See `analysis/btc-sol-mark-prices.md`; no settlement-proxy methodology was selected.
+
+
 BTC/SOL trades need full June 2025–September 2026 coverage and exact daily volume reconciliation. Both October 10, 2025 daily archives failed the gate and were not stored; this stress-day coverage must be repaired or an explicit alternative volume contract must be evaluated without suppressing the defect. The scored window remains fixed. Paired July 1 warmup book downloads returned 429 with a ~23-hour Retry-After; respect the cooldown before resuming sample validation.
 
 Combined funding audit passed for both symbols: 1,371 settlements over 457 days, constant 8-hour cadence, no month-boundary gaps. All four spot/futures price series cover June 2025–September 2026 with complete minute grids. Contract/minimum-notional constraints, fee tiers, mark/index valuation and capital/collateral accounting still need specification before M7 headline metrics.
