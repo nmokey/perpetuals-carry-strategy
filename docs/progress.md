@@ -22,6 +22,21 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — BTC/SOL monthly book acquisition resumed
+
+User authorized acquiring first-of-month books before other missing datasets. Started a
+single sequential, resumable worker for July 2025–September 2026: 15 days per symbol,
+`incremental_book_L2` plus `book_snapshot_25`, 60 archives total. BTC July 1 returned
+HTTP 200 and 491,233,472 compressed bytes were cached. Full inflation/structural conversion
+is in progress; this is not yet an independently replay-validated day. No 0G expansion.
+
+The background job uses the existing downloader and ingest functions, stages incomplete
+conversions outside accepted partitions, and records completion/hash/row counts in
+`data/btc-sol/reports/monthly-book-acquisition.json`. Its companion log and local driver
+are under the same ignored reports directory. A 429 stops all further requests and records
+Retry-After/deadline rather than immediately retrying. Existing funding/price/trade data
+is retained. No engineering changes, remote publication or test-suite claims in this step.
+
 ## 2026-10-10 — M7-T3 chronological walk-forward integration
 
 Connected the real rolling M6 forecasts, T1 entry/exit policy, T2 lot sizing and T4

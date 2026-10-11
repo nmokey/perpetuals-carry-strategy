@@ -11,6 +11,15 @@ more useful record.
 
 ## Active
 
+**2026-10-10 acquisition update:** first-of-month BTC/SOL acquisition resumed on explicit
+user instruction. The first July 1 BTC update archive returned 200; full conversion and
+paired reference/replay validation are pending. A sequential background worker covers
+all 15 monthly warmup/study days per symbol and stops on any new vendor cooldown.
+See the ignored `reports/monthly-book-acquisition.json` and `.log` under `data/btc-sol`
+for live completion; the earlier zero-book study report remains a prior inventory.
+Downloading free samples does not close continuous L2, ADV or model-admission gates.
+
+
 **2026-10-10 M7-T3 update:** chronological integration and synthetic end-to-end checks
 are implemented. The loop requires complete funding/decision calendars, actual settlement
 and valuation marks, explicit fees, prior ADV/metadata and admitted M5/M6 evidence. Its

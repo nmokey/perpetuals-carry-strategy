@@ -151,3 +151,13 @@ These are **hypotheses, not implemented results, success criteria, test fixtures
 reference price. Test that consistency rather than setting position size to $210K. For event counts,
 report book updates, trades and reference rows separately; exclude repeat replays, synthetic stress
 events and size-sweep repetitions from the unique-source total. Negative or lower results are valid.
+
+## 2026-10-10 acquisition restart
+On explicit user instruction, first-of-month updates and top-25 references are being
+acquired sequentially for BTC/SOL, July 2025–September 2026 (60 archives). The July 1
+BTC update download succeeded (491,233,472 compressed bytes); structural conversion and
+independent replay validation remain pending. Live per-archive status, SHA-256 and rows
+are recorded under `data/btc-sol/reports/monthly-book-acquisition.json`, with a companion
+log and resumable local driver. Partial conversions stay in staging. A new 429 stops the
+batch and records the vendor's retry deadline; the prior 429 is not proof of a current
+cooldown. Old coverage reports must not be read as current acquisition status.

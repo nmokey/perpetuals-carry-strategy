@@ -312,3 +312,28 @@ or perp books, reconstruct books from trades, or persist counterfactual executio
 later vendor updates. Fixed collateral failures abort without simulated liquidation.
 
 Verification: `uv run pytest tests/strategy/test_walk_forward.py tests/strategy/test_backtest_cli.py tests/test_architecture.py -q`.
+
+## BTC/SOL monthly book acquisition (2026-10-10)
+
+The authorized local batch covers 15 first-of-month days per symbol, July 2025–September
+2026, for both futures `incremental_book_L2` and `book_snapshot_25` (60 archives). Its
+resumable driver, log and live status are under `data/btc-sol/reports/`:
+`acquire-monthly-books.py`, `monthly-book-acquisition.log`, and
+`monthly-book-acquisition.json`. The driver is an ignored operational artifact, using
+the existing ingestion functions; no vendor rows enter Git. Only successful full-day
+conversions move from staging into the accepted partition tree. Completion here means
+structural ingest; independent replay against the top-25 reference is still required.
+
+To resume after a stopped batch, from the repository root:
+
+```bash
+nohup setsid flock -n data/btc-sol/reports/monthly-book-acquisition.lock \
+  uv run python -u data/btc-sol/reports/acquire-monthly-books.py \
+  > data/btc-sol/reports/monthly-book-acquisition.log 2>&1 < /dev/null &
+```
+
+The lock prevents duplicate workers. A 429 halts further requests and records Retry-After
+and its UTC deadline; rerunning before that deadline exits without contacting Tardis.
+Do not treat a cached archive, staged conversion, or an older study-status report as a
+replay-validated day. Refresh coverage and run the existing `tools.validate_book` workflow
+once paired partitions are ready. This batch does not acquire regular-day L2 or spot books.
