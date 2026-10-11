@@ -1,0 +1,46 @@
+# Economic sensitivity reference only, NOT a verified historical base-case schedule.
+# Observed 2026-10-10. Study dates below are assumption applicability, not venue evidence.
+# Regular user, taker, no BNB discount; commissions deducted as USDT equivalents.
+# Futures FAQ rates are hypothetical examples. Spot table is current, not historical.
+# Admission defaults off. B-010 remains open; see M7-T4 spec for sources/limitations.
+schema_version = 1
+
+[[periods]]
+symbol = "BTCUSDT"
+market = "perp"
+start_ms = 1751328000000 # 2025-07-01 UTC
+end_ms = 1790812800000 # 2026-10-01 UTC, exclusive
+taker_fraction = "0.0005"
+source = "https://www.binance.com/en/support/faq/detail/360033544231"
+observed_at_ms = 1791590400000 # 2026-10-10 UTC
+kind = "assumption"
+
+[[periods]]
+symbol = "BTCUSDT"
+market = "spot"
+start_ms = 1751328000000
+end_ms = 1790812800000
+taker_fraction = "0.001"
+source = "https://www.binance.com/en/fee/trading"
+observed_at_ms = 1791590400000
+kind = "assumption"
+
+[[periods]]
+symbol = "SOLUSDT"
+market = "perp"
+start_ms = 1751328000000
+end_ms = 1790812800000
+taker_fraction = "0.0005"
+source = "https://www.binance.com/en/support/faq/detail/360033544231"
+observed_at_ms = 1791590400000
+kind = "assumption"
+
+[[periods]]
+symbol = "SOLUSDT"
+market = "spot"
+start_ms = 1751328000000
+end_ms = 1790812800000
+taker_fraction = "0.001"
+source = "https://www.binance.com/en/fee/trading"
+observed_at_ms = 1791590400000
+kind = "assumption"

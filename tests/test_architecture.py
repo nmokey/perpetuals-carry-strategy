@@ -38,7 +38,7 @@ class NoCompiledReplay:
 sys.meta_path.insert(0, NoCompiledReplay())
 from perpcarry.models import impact_model, impact_model_io
 from perpcarry.models import funding_model, funding_walk_forward, rolling_funding
-from perpcarry.strategy import carry, costs, funding, sizing
+from perpcarry.strategy import accounting, carry, costs, fees, funding, sizing
 law = impact_model.FittedLaw("square_root", 40.0, 0.5)
 assert law.predict([0.01])[0] == 4.0
 assert impact_model_io.SCHEMA_VERSION == 1
@@ -49,6 +49,8 @@ assert carry.Policy(3, .8, .5).allow_synthetic_costs is False
 assert callable(costs.from_artifact)
 assert callable(funding.from_model)
 assert callable(sizing.size_position)
+assert callable(accounting.Ledger.start)
+assert callable(fees.load_schedule)
 assert "perpcarry_cpp" not in sys.modules
 """
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)

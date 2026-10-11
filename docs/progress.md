@@ -15,12 +15,34 @@ Milestone status at a glance:
 | M4 — Impact simulator (C++) | **Complete** (2026-08-30), T1–T3 |
 | M5 — Impact model calibration | T1–T3 implemented (2026-10-08/09); BTC/SOL fits/exports data-gated |
 | M6 — Funding persistence model | T1–T3 implemented and verified; predictive adequacy open (B-012) |
-| M7 — Strategy & backtest | T1/T2 implemented and verified (2026-10-10); T4 accounting next, before T3 |
+| M7 — Strategy & backtest | T1/T2/T4 implemented and verified (2026-10-10); T3 integration next |
 | M8 — Comparative study | Not started |
 | M9 — Analysis & writeup | Not started |
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-10-10 — M7-T4 hand-reconciled settlement accounting
+
+Implemented an immutable Decimal ledger for independently executed long-spot/short-perp
+legs, partial fills/exits, actual-mark funding, explicit financing, dated taker fees and
+gross/net equity. Fees use executed notional; opening derivative shorts creates no sale
+proceeds. Fill prices already include execution costs; reference-mid gross accounting
+avoids deducting them twice. Missing settlements, duplicates, reversal and backwards
+events fail. A 15-second guard rejects ambiguous perp fills around funding boundaries.
+
+Added cited, dated BTC/SOL fee reference scenarios, explicitly assumptions rather than
+historical evidence. Default admission rejects them. D-037 records quote-equivalent fees,
+negative-cash reporting and remaining collateral/mark/fee gates. B-009–B-012 and OD-4
+remain open. Next is T3 integration; no BTC/SOL strategy return, Sharpe or capacity result
+has been produced. Kept T4 on its own branch above a separate docs-only PR-scope commit;
+no new downloads, C++ changes, dependency changes or remote writes.
+
+Verification: 728 offline Python tests passed, ten network tests deselected; 71 new T4
+tests. Hand examples cover cash/equity, fee-date transitions, sensitivity, signed funding,
+unequal/partial legs and actual/reference execution prices. 39 isolated accounting and
+admission faults caught by named tests. Ruff lint/format, architecture and whitespace
+checks passed. C++ unchanged/not rerun (85 passed in the preceding publication audit).
 
 ## 2026-10-10 — Accumulated-change audit for authorized publication
 

@@ -130,7 +130,7 @@ requires explicit side, schedule, depth and size regime; missing strata raise in
 of substituting a law. Returned diagnostic or negative laws retain their form and
 usability flags in the artifact. M7-T1 consumes admitted primary laws through
 `strategy.costs.from_artifact(...)`; synthetic/default, depth, size and chronology gates
-remain explicit. M7-T2 sizing is implemented; next is T4 accounting before T3; weekly predictive
+remain explicit. M7-T2 sizing and T4 accounting are implemented; next is T3 integration; weekly predictive
 adequacy is not cleared.
 
 ## M6-T1 funding analysis
@@ -216,7 +216,7 @@ Held positions keep their original planned horizon. Pass forecasts and costs for
 remaining settlements, with entry costs excluded from continuation. Missing or rejected
 evidence returns wait when flat and exit intent when held; an intent is not a fill.
 Synthetic examples and integration coverage: `uv run pytest tests/strategy -q`.
-Next: T4 accounting, then T3; dated research parameters, cost/adequacy evidence and
+Next: T3 walk-forward integration; dated research parameters, cost/adequacy evidence and
 executable metadata remain necessary before a full walk-forward run.
 
 ## M7-T2 sizing (library only)
@@ -236,4 +236,30 @@ break-even size in ADV/notional. `binding_limits` describes the feasible maximum
 need not bind the chosen optimum. An above-support root has no extrapolated capacity;
 zero impact still has finite caps. Diagnostics are not realized or full-year results.
 Test with `uv run pytest tests/strategy/test_sizing.py -q`. No backtest CLI yet.
-Next: T4 hand-reconciled accounting, then T3 walk-forward integration.
+T4 accounting is implemented; next is T3 walk-forward integration.
+
+## M7-T4 settlement accounting (library only)
+
+`strategy.accounting.Ledger.start(...)` requires symbol, Decimal initial capital, the
+next nominal funding boundary and an explicit `strategy.fees.FeeSchedule`. Apply actual
+`Fill` records for each leg independently; use executed base quantity, execution price
+and contemporaneous reference mid. Methods return new immutable ledgers. Opening a
+short perp never credits spot-like sale proceeds.
+
+Consume every `FundingSettlement`, including flat periods, with a separately admitted
+actual mark and per-row cadence. T3 must normalize source timestamp jitter, provide the
+in-force calendar and consume the initial flat settlement before entering. Fills within
+15 seconds of funding are rejected. `value(Marks)`
+requires contemporaneous spot/perp marks and reports cash, exposures and gross/net
+equity. `finance(...)` records explicit charges. No venue wallet/margin/liquidation model
+is implied; negative cash remains visible and needs caller capital admission.
+
+`fees.load_schedule(Path("config/fee-reference.toml"))` reads the cited reference table.
+Its historical applicability is an assumption, so quotes fail by default. Explicit
+`allow_assumptions=True` is for labeled sensitivity/synthetic work; it does not certify
+fee history. Both actual fees and gross/net accounting use USDT equivalents, without
+base-asset or BNB inventory. The research base case and settlement marks remain B-010
+gates. See `docs/specs/M7/M7-T4-settlement-accounting.md` and D-037.
+
+Verification: `uv run pytest tests/strategy/test_accounting.py tests/test_architecture.py -q`.
+No BTC/SOL P&L or Sharpe is produced by this library verification.

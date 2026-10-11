@@ -11,9 +11,15 @@ more useful record.
 
 ## Active
 
+**2026-10-10 M7-T4 update:** immutable fee/fill/funding and gross/net accounting is
+hand-reconciled. T3 integration can proceed on synthetic admitted inputs. The reference
+fee table is a cited sensitivity assumption, not verified historical base-case evidence.
+Settlement marks, historical fees, quote-versus-base spot commission treatment and
+collateral/maintenance policy remain B-010 gates. No research P&L or Sharpe is established.
+
 **2026-10-10 M7-T2 update:** constrained sizing and OD-10 mechanics are verified on
 synthetic inputs. No real BTC/SOL ADV/contract/depth record, fit or approval is invented.
-T4 accounting is next, then T3. Actual input coverage, SOL metadata, historical policy
+T4 accounting is now implemented; T3 integration is next. Actual input coverage, SOL metadata, historical policy
 selection and funding adequacy remain required; engineering does not clear these gates.
 
 ### 2026-10-10 M7-T1 implementation note
@@ -30,7 +36,7 @@ existing sequencing watch item. B-009–B-012 remain open.
 continue to block research fits and headline results, rather than implementation of the
 regression/serialization machinery. No BTC/SOL impact model has been fitted to admitted data.
 M6-T1–T3 funding engineering and M7-T1 decision mechanics are implemented. M7-T2
-sizing is implemented (OD-10 mechanics resolved); T4 accounting is next before T3. OD-9 requires a dated research parameter set before a
+sizing and T4 accounting are implemented; T3 integration is next. OD-9 requires a dated research parameter set before a
 headline run; no real funding approval is issued while B-012 is open. EDA and predictive results
 show varying stationarity diagnostics and a material SOL negative tail. These are inputs
 to posterior/predictive checks, not a blocker to implementing the specified first AR(1)
@@ -63,6 +69,16 @@ See `docs/analysis/M6-T3-rolling-funding.md`.
 BTC/SOL trades need full June 2025–September 2026 coverage and exact daily volume reconciliation. Both October 10, 2025 daily archives failed the gate and were not stored; this stress-day coverage must be repaired or an explicit alternative volume contract must be evaluated without suppressing the defect. The scored window remains fixed. Paired July 1 warmup book downloads returned 429 with a ~23-hour Retry-After; respect the cooldown before resuming sample validation.
 
 Combined funding audit passed for both symbols: 1,371 settlements over 457 days, constant 8-hour cadence, no month-boundary gaps. All four spot/futures price series cover June 2025–September 2026 with complete minute grids. Contract/minimum-notional constraints, fee tiers, mark/index valuation and capital/collateral accounting still need specification before M7 headline metrics.
+
+**T4 clarification (2026-10-10, D-037):** economic accounting is implemented, but existing
+minute trade-price grids are not actual funding settlement marks. Supply separately admitted
+marks and a historically defensible fee base case, with sensitivity runs. The committed
+`config/fee-reference.toml` uses current spot/hypothetical futures references; all study
+periods are labeled assumptions and rejected without explicit opt-in. Fee accounting uses
+USDT equivalents, without base-asset/BNB fee inventory or venue commission rounding.
+Capital is an explicit input; negative cash is reported, not repaired. Margin reservation,
+maintenance/liquidation, executable capital limits and return denominator remain research
+policy work. Gross/net equity outputs alone do not clear these gates.
 
 ### B-011 — SOL historical tick grid disagrees across windows
 

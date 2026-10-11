@@ -888,3 +888,36 @@ and OD-4 stay open; dated policy selection and real-input admission remain resea
 Correct the existing accounting sequencing defect: T4 depends on T1/T2 and OD-11 and
 precedes T3; T3 depends on T2/T4 and OD-12. Task IDs and acceptance criteria are retained.
 Next is hand-reconciled T4 accounting, then T3 walk-forward integration.
+
+## D-037 — Economic settlement accounting and explicit fee evidence (2026-10-10)
+
+Implement T4 as a pure immutable Decimal ledger for long spot and short linear USDT
+perpetuals. Independent executed fills change each leg's quantity/basis; no fictional
+derivative sale proceeds. Funding cash = minus signed current perp quantity times actual
+settlement mark times signed rate. Positive funding pays shorts; negative funding debits
+them. Gross uses the same actual quantities at reference-mid executions, with identical
+funding marks, before explicit fees/financing. Net uses actual fills and cash. Impact and
+spread present in execution prices are not deducted again as estimated costs.
+
+Require an explicit next-funding boundary and consume each settlement in order, even
+flat. Normalize/validate archive jitter before ledger admission. Per-row cadence advances
+the next boundary under the declared in-force schedule; an announced calendar change
+must be supplied by T3 before affected fills, without future rate use. Reject perp fills
+within 15 seconds on either side of a funding boundary: nominal ordering cannot establish
+exact venue eligibility inside the documented timing uncertainty. This conservative guard
+restricts the executable path and must be reported, rather than advertised as venue replay.
+
+Fees are taker USDT equivalents on executed notional; base-asset/BNB inventory, discounts,
+rebates and exchange commission rounding are not simulated. The cited 2026-10-10 table
+uses current spot 0.10% and a hypothetical futures 0.05% illustration as study sensitivity
+assumptions. It does not certify those historical rates. Default admission rejects
+assumptions; verified records require evidence known by the fill time. OD-11 remains
+resolved as a methodology, while its historically defensible research base case is not
+cleared. Source URLs and effective/observation dates are explicit in config and the spec.
+
+Capital is explicit, and negative cash is visible; no automatic financing, margin
+reservation or liquidation. This is economic P&L accounting, not a venue wallet model.
+OD-4 and B-010 still require fee-asset treatment, funding marks and collateral/capital
+admission policy. In particular complete trade-price minute bars cannot replace funding
+settlement marks. T3 owns input admission/calendar/execution integration; M8 owns Sharpe
+and fee sensitivity reporting. T4's synthetic reconciliation completes engineering only.

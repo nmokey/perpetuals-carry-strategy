@@ -51,7 +51,8 @@ STORAGE_DIR = "funding"
 
 #: Output schema per design doc Section 3.3 (plus the ``date`` partition key).
 #: Note what is absent: ``mark_price``. The venue does not publish it alongside funding
-#: history and it is unused before M7-T4, so it is not emitted -- not even as null.
+#: history. M7-T4 requires separately admitted settlement marks; trade klines cannot
+#: substitute for them. This fetcher does not emit fabricated marks, even as null.
 SCHEMA: dict[str, str] = {
     "funding_time": "int64",
     "symbol": "string",

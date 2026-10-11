@@ -69,8 +69,10 @@ coverage but weak weekly calibration. **M7-T1 entry/exit rules are implemented**
 configurable funding-after-cost gates, fixed holding horizons and strict evidence admission
 ([policy specification](docs/specs/M7/M7-T1-carry-rules.md)). **M7-T2 sizing is implemented**, separating the profit-optimal size from supported
 break-even capacity ([specification](docs/specs/M7/M7-T2-position-sizing.md)).
-**Next: M7-T4 accounting, before T3 backtesting**;
-model adequacy and execution/accounting gates remain open. No strategy P&L is reported yet.
+**M7-T4 accounting is implemented**, with hand-reconciled fills, fees, funding and gross/net
+equity ([specification](docs/specs/M7/M7-T4-settlement-accounting.md)).
+**Next: M7-T3 walk-forward integration**; model adequacy, actual settlement marks, historical
+fee evidence and execution/collateral gates remain open. No research strategy P&L is reported yet.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from
 the M1 scripts.

@@ -1,7 +1,7 @@
 # Design Document: PerpCarry
 ## Funding-Rate-Aware Execution Cost Analysis for Crypto Perpetual Futures
 
-**Status:** Active BTC/SOL scope, updated 2026-10-10; M0–M4 engineering retained, M5-T1–T3 implemented with real fits gated; M6-T1–T3 implemented and causally verified; predictive adequacy remains open; M7-T1/T2 rules and sizing implemented; M7-T4 accounting next, before T3.
+**Status:** Active BTC/SOL scope, updated 2026-10-10; M0–M4 engineering retained, M5-T1–T3 implemented with real fits gated; M6-T1–T3 implemented and causally verified; predictive adequacy remains open; M7-T1/T2/T4 rules, sizing and accounting implemented; T3 walk-forward integration next.
 **Author:** Ryan Zheng
 **Purpose:** Seed document for spec-driven development. Each task in Section 5 is intended to become one implementation spec/ticket. Open decisions in Section 6 should be resolved (or explicitly deferred with a documented default) before specs are written for the milestones they affect.
 
@@ -162,9 +162,9 @@ funding_interval_hours, last_funding_rate`.
 | `funding_interval_hours` | int32 | **Not a constant, and not even a per-symbol constant.** Measured: majors 8h; `1000BONKUSDT` 4h; `0GUSDT` ran 4h at listing, 1h from 2025-09-22, 4h again by 2026-06. Required to annualise — read it per row, never per symbol |
 
 **`mark_price` is deliberately absent.** It was specified in an earlier draft, but the venue does
-not publish it alongside funding history, and it is unused before M7-T4. If settlement price is
-needed there, source it from `markPriceKlines` at that point rather than carrying a mostly-unused
-column through the pipeline.
+not publish it alongside funding history. M7-T4 now requires a separately admitted actual
+settlement mark; this coverage remains missing. Source it independently (for example, evaluate
+`markPriceKlines` granularity) before research accounting; trade-price bars are not a substitute.
 
 ### 3.4 Storage
 
@@ -333,8 +333,9 @@ identified last — during the external-dependencies audit, not in the original 
 | M7-T4 | Fee & funding settlement accounting | P&L module incorporating real fee schedule + funding timing | P&L reconciles against a hand-computed example trade | M7-T1, M7-T2, **OD-11 resolved** |
 | M7-T3 | Walk-forward backtest loop | `run_backtest.py` | Reproducible given fixed seed; "future data poisoning" test confirms no leakage | M7-T2, M7-T4, **OD-12 resolved** |
 
-T4 now precedes T3 to supply its accounting contract (D-036). T1/T2 engineering is
-implemented; real-input admission remains gated.
+T4 now precedes T3 to supply its accounting contract (D-036). T1/T2/T4 engineering is
+implemented; T3 integration is next. D-037 specifies T4's quote-fee approximation, timing
+guard and assumption-only reference fee table; real-input admission remains gated.
 
 ### M8 — Full Backtest: BTC vs. Altcoin Comparative Study
 
