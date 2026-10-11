@@ -11,6 +11,15 @@ more useful record.
 
 ## Active
 
+**2026-10-10 M7-T3 update:** chronological integration and synthetic end-to-end checks
+are implemented. The loop requires complete funding/decision calendars, actual settlement
+and valuation marks, explicit fees, prior ADV/metadata and admitted M5/M6 evidence. Its
+fixed collateral envelope is a scenario, not historical maintenance/liquidation policy.
+CLI coverage completion does not certify research inputs or daily return coverage.
+M8 BTC/SOL runs remain gated by B-009–B-012 and dated research policy selection. No real
+impact fit/funding approval, synthetic data substitute or headline result is introduced.
+
+
 **2026-10-10 M7-T4 update:** immutable fee/fill/funding and gross/net accounting is
 hand-reconciled. T3 integration can proceed on synthetic admitted inputs. The reference
 fee table is a cited sensitivity assumption, not verified historical base-case evidence.

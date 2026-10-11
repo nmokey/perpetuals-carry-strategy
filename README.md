@@ -71,7 +71,9 @@ configurable funding-after-cost gates, fixed holding horizons and strict evidenc
 break-even capacity ([specification](docs/specs/M7/M7-T2-position-sizing.md)).
 **M7-T4 accounting is implemented**, with hand-reconciled fills, fees, funding and gross/net
 equity ([specification](docs/specs/M7/M7-T4-settlement-accounting.md)).
-**Next: M7-T3 walk-forward integration**; model adequacy, actual settlement marks, historical
+**M7-T3 walk-forward integration is implemented**, connecting models, sizing, execution and
+accounting with deterministic, causal output ([specification](docs/specs/M7/M7-T3-walk-forward.md)).
+**Next: admit the inputs for M8 BTC/SOL runs**; model adequacy, actual settlement marks, historical
 fee evidence and execution/collateral gates remain open. No research strategy P&L is reported yet.
 
 Data is downloaded, not shipped: `data/` is gitignored and everything in it is re-derivable from

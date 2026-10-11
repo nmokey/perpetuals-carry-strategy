@@ -235,8 +235,8 @@ chosen size, expected dollars, marginal net fraction, largest feasible size and 
 break-even size in ADV/notional. `binding_limits` describes the feasible maximum, which
 need not bind the chosen optimum. An above-support root has no extrapolated capacity;
 zero impact still has finite caps. Diagnostics are not realized or full-year results.
-Test with `uv run pytest tests/strategy/test_sizing.py -q`. No backtest CLI yet.
-T4 accounting is implemented; next is T3 walk-forward integration.
+Test with `uv run pytest tests/strategy/test_sizing.py -q`. T3 integrates this library
+with T4 accounting; see the walk-forward CLI below.
 
 ## M7-T4 settlement accounting (library only)
 
@@ -263,3 +263,52 @@ gates. See `docs/specs/M7/M7-T4-settlement-accounting.md` and D-037.
 
 Verification: `uv run pytest tests/strategy/test_accounting.py tests/test_architecture.py -q`.
 No BTC/SOL P&L or Sharpe is produced by this library verification.
+
+## M7-T3 walk-forward integration
+
+M7 engineering is implemented. This CLI consumes an explicitly admitted local event
+manifest; it does not turn the downloaded corpus into research-ready inputs. The example
+scenario is engineering configuration, not an approved historical BTC/SOL policy:
+
+```bash
+uv run python -m perpcarry.tools.run_backtest \
+  --study-config config/btc-sol-study.toml \
+  --run-config config/backtest-example.toml \
+  --events /path/to/BTCUSDT-events.jsonl \
+  --fees config/fee-reference.toml \
+  --output /path/to/new-BTCUSDT-run.jsonl
+```
+
+Use a separate SOL scenario with the same study dates. Fee-reference assumptions require
+explicit opt-in and do not certify historical costs. Output must not already exist.
+Exit code 0 means configured coverage complete; 2 means incomplete coverage or an input
+error. Header records scenario/source hashes; footer hashes consumed input bytes. Earlier
+records survive a later error. No Sharpe or full-year capacity claim is emitted.
+
+Each JSONL row has `type`, unique `event_id`, `symbol`, and integer UTC `time_ms`, ordered
+chronologically. All prices, rates and realized financing are decimal **strings**:
+
+- `funding`: `rate`, declared `interval_hours`, `mark_price` (may be null only in warmup).
+- `market`: `spot_mid`, `perp_mid`, independent `spot_mark`/`perp_mark`, Boolean `decide`,
+  `financing_usdt` and nullable `opportunity`. Require one decision at every settlement
+  plus `decision_delay_ms`; other rows may provide valuation without decisions.
+- `opportunity`: `fold_start_ms`, `impact`, nullable `approval`, `sizing`,
+  `perp_half_spread_bps`, `spot_execution_bps`, `financing_fraction`. `impact` references
+  `path` (relative to manifest), expected `sha256`, `schedule`, and `size_regime` under
+  the existing M5 schema. `sizing` follows `SizingInputs`, with decimal-string
+  `quantity_step`/`min_quantity`; `approval` follows `FundingApproval`. See the T3 spec
+  and tested manifests in `tests/strategy/test_backtest_cli.py` for the complete contract.
+
+The full study is October 2025–September 2026 with July–September warmup. Include every
+funding row, every scheduled decision and terminal valuation at 2026-10-01 00:00 UTC minus
+one millisecond. This coverage check does not establish daily-close data for M8 Sharpe.
+Model training and held-out validation must both fit inside the configured prior impact
+window. Missing approvals prevent entry; inferred exits still require executable inputs.
+
+Library `iter_backtest(...)` also accepts `BookExecutor(provider)`, whose provider returns
+a copied C++ Pipeline checkpoint for each leg at the exact decision time. Ingestion and
+book replay remain separated by the existing SPSC queue. This does not supply absent spot
+or perp books, reconstruct books from trades, or persist counterfactual execution into
+later vendor updates. Fixed collateral failures abort without simulated liquidation.
+
+Verification: `uv run pytest tests/strategy/test_walk_forward.py tests/strategy/test_backtest_cli.py tests/test_architecture.py -q`.

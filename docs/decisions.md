@@ -921,3 +921,38 @@ OD-4 and B-010 still require fee-asset treatment, funding marks and collateral/c
 admission policy. In particular complete trade-price minute bars cannot replace funding
 settlement marks. T3 owns input admission/calendar/execution integration; M8 owns Sharpe
 and fee sensitivity reporting. T4's synthetic reconciliation completes engineering only.
+
+## D-038 — Causal integration and explicit execution scenarios (2026-10-10)
+
+M7-T3 consumes one event at a time, without sorting or reading future suffixes. Warmup
+only fits funding. At each scored boundary settle the actual position at the actual
+funding mark, then admit that observation to M6. One decision follows at a configured
+delay (example 16 seconds), forecasting future settlements. The delay is an availability
+assumption outside T4's guard, not historical publication-latency evidence. Require the
+constant declared cadence and complete decision calendar; unsupported cadence changes
+fail pending a dated adapter. Preserve the original holding budget through each update.
+
+Use impact artifacts sealed for monthly UTC folds, with complete validation preceding
+fold start. CLI artifacts must fit entirely inside the prior configured impact window;
+90 training days plus later validation cannot be passed off as a 90-day total window.
+Funding approval remains explicitly scoped to model, horizon, symbol and dates. Independent
+valuation marks and actual settlement marks are required; trade-price bars do not silently
+substitute. Library evidence is caller admitted; digest fields are not raw-source audits.
+
+Execution is an explicit scenario: inferred side-specific impact/spread with spot charges,
+or full paired C++ market walks on copied consumer checkpoints for both legs. Book walks
+are static counterfactual fills without persistent footprint in subsequent vendor updates.
+Neither backend manufactures missing books or settles B-009's headline methodology.
+Partial or unsupported fills cannot turn an exit intent into a fictional flat position.
+
+Bound entry by spot cash, adverse execution costs and a fixed derivative collateral
+fraction. Recheck proposed fills and require cash plus marked perp P&L to cover reserve
+at funding and valuation events. Shortfall aborts; no maintenance-margin/liquidation model.
+Fees remain quote-equivalent scenario inputs under D-037, with explicit expected versus
+realized financing. These mechanics do not close OD-4 or historical B-010 accounting gates.
+
+The CLI labels engineering runs, preserves earlier output on later errors, rejects output
+overwrite and marks truncated coverage incomplete. Completion needs the full funding and
+decision path plus an end-exclusive-minus-one-millisecond valuation; it may retain an
+open position. This is not daily-return coverage, research adequacy or Sharpe certification.
+M8 owns metrics and fee sensitivity after B-009–B-012 and dated research inputs are cleared.

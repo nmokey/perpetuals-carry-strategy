@@ -333,16 +333,17 @@ identified last — during the external-dependencies audit, not in the original 
 | M7-T4 | Fee & funding settlement accounting | P&L module incorporating real fee schedule + funding timing | P&L reconciles against a hand-computed example trade | M7-T1, M7-T2, **OD-11 resolved** |
 | M7-T3 | Walk-forward backtest loop | `run_backtest.py` | Reproducible given fixed seed; "future data poisoning" test confirms no leakage | M7-T2, M7-T4, **OD-12 resolved** |
 
-T4 now precedes T3 to supply its accounting contract (D-036). T1/T2/T4 engineering is
-implemented; T3 integration is next. D-037 specifies T4's quote-fee approximation, timing
-guard and assumption-only reference fee table; real-input admission remains gated.
+T4 precedes T3 to supply its accounting contract (D-036). T1–T4 engineering is
+implemented. D-038 records T3 causal integration, separate execution backends and coverage
+checks. D-037 specifies the quote-fee approximation and assumption-only fee reference;
+real-input admission remains gated. M8 requires the integrated T3 loop.
 
 ### M8 — Full Backtest: BTC vs. Altcoin Comparative Study
 
 | ID | Task | Deliverable | Acceptance Criteria | Depends On |
 |---|---|---|---|---|
-| M8-T1 | Full backtest — BTCUSDT | P&L series, Sharpe, max drawdown, capacity curve | Runs end-to-end without manual intervention | M7-T4 |
-| M8-T2 | Full backtest — SOLUSDT | Same outputs, second symbol | Same | M7-T4, **OD-3 resolved** |
+| M8-T1 | Full backtest — BTCUSDT | P&L series, Sharpe, max drawdown, capacity curve | Runs end-to-end without manual intervention | M7-T3 |
+| M8-T2 | Full backtest — SOLUSDT | Same outputs, second symbol | Same | M7-T3, **OD-3 resolved** |
 | M8-T3 | Sensitivity sweep | Grid over order size / entry threshold / holding period | Results stored as Parquet, reproducible | M8-T1, M8-T2 |
 | M8-T4 | Naive-baseline comparison | Side-by-side: impact-aware vs. flat-cost-assumption strategy | Quantifies overstatement of returns from ignoring impact modeling | M8-T1, M8-T2 |
 

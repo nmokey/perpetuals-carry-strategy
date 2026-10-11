@@ -1,0 +1,19 @@
+# M7-T3 engineering example. These are explicit scenario choices, not admitted research
+# parameters or a selection of the headline execution mode (B-009/B-010/B-012 stay open).
+[run]
+symbol = "BTCUSDT" # Use SOLUSDT in a separate run against the same study config.
+execution_mode = "inferred"
+initial_capital_usdt = "1000000"
+collateral_fraction = "1" # Fixed cash collateral envelope, not venue margin tiers.
+allow_fee_assumptions = true # Labeled sensitivity only; historical base case unverified.
+seed = 703
+draws = 4096
+min_settlements = 30
+interval_hours = 8 # Must match every admitted row; cadence changes fail explicitly.
+decision_delay_ms = 16000 # One required decision after every settlement, outside the guard.
+
+[policy]
+horizon_settlements = 3
+entry_probability = 0.8
+continuation_probability = 0.5
+allow_synthetic_costs = false

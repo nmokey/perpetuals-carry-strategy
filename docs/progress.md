@@ -15,12 +15,37 @@ Milestone status at a glance:
 | M4 — Impact simulator (C++) | **Complete** (2026-08-30), T1–T3 |
 | M5 — Impact model calibration | T1–T3 implemented (2026-10-08/09); BTC/SOL fits/exports data-gated |
 | M6 — Funding persistence model | T1–T3 implemented and verified; predictive adequacy open (B-012) |
-| M7 — Strategy & backtest | T1/T2/T4 implemented and verified (2026-10-10); T3 integration next |
+| M7 — Strategy & backtest | T1–T4 engineering implemented and verified (2026-10-10); research runs gated |
 | M8 — Comparative study | Not started |
 | M9 — Analysis & writeup | Not started |
 | M10 — Perf benchmarking (stretch) | Not started |
 
 ---
+
+## 2026-10-10 — M7-T3 chronological walk-forward integration
+
+Connected the real rolling M6 forecasts, T1 entry/exit policy, T2 lot sizing and T4
+settlement accounting. Monthly impact evidence is sealed before each fold. Decisions
+occur once per settlement at an explicit 16-second delay; missing decisions/funding fail
+as encountered. Original holding budgets survive updates. Independent current marks,
+paired full fills and explicit fee/financing inputs determine realized gross/net equity.
+Separate inferred fills and copied C++ Pipeline book walks preserve ingestion/queue
+ownership. Fixed collateral scenarios constrain sizing and actual fills; reserve failures
+abort without inventing liquidation. D-038 documents assumptions and remaining limits.
+
+Added a lazy local JSONL CLI, explicit example scenario and provenance/coverage records.
+Truncated inputs are incomplete; terminal positions stay marked and open. No BTC/SOL
+research P&L, Sharpe, capacity or event-throughput claim was produced. No downloads,
+C++/dependency changes or remote writes. Kept this task on its own branch above T4.
+M7 engineering is complete; B-009–B-012 and dated policy/fee/mark/ADV/metadata admission
+still gate M8. Execution backend availability does not settle B-009's headline choice.
+
+Verification: 794 offline Python tests passed, ten network tests deselected; 66 new T3
+checks include actual M5/M6 integration, C++ queue checkpoints, deterministic output,
+future poisoning and handwritten fee/P&L examples. Ruff lint/format and architecture
+checks passed. C++ unchanged; its installed core is exercised by the new book tests.
+All 38 isolated faults were caught by named tests (no collection-error credit), covering
+causal reads, calendar, holding budget, costs, capital, paired/book fills and CLI admission.
 
 ## 2026-10-10 — M7-T4 hand-reconciled settlement accounting
 
