@@ -1,5 +1,11 @@
 # M4-T3 — Order size normalization
 
+**2026-10-11 scope clarification:** this spec records the completed raw-trade normalization
+contract. D-040 adds an explicit active-study futures-bar alternative in `models/bar_volume.py`;
+M5 opts in with `--adv-source futures_bars`. Statements below about klines as cross-checks
+apply to the raw-trade path, not a prohibition on the separately validated alternative.
+The measured depth boundaries below are historical 0G results, not BTC/SOL limits.
+
 **Milestone:** M4
 **Status:** **Complete 2026-08-30.** `python/perpcarry/ingestion/fetch_klines.py` and
 `python/perpcarry/models/order_size.py`; 8 + 14 tests, 4 mutations run and 4 caught. The criterion's

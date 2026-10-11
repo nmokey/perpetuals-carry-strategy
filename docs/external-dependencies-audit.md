@@ -1,5 +1,12 @@
 # External Dependencies Audit
 
+Historical service observations; no fresh venue probe is implied. Current scope uses
+inferred execution and verified futures-bar ADV (D-039/D-040). Sample acquisition and all 30 replay verdicts
+are complete, mark bars are acquired, and research gates remain open; see
+[current status](current-status.md) and [historical contract evidence](analysis/historical-fees-contracts.md).
+The downloadable funding archive lacks marks; the separate funding-history API exposes
+associated markPrice but is blocked on this host.
+
 **Date:** 2026-08-12
 **Scope:** Every assumption `design-doc.md` makes about an external service.
 **Method:** Each claim was checked by actually calling the service or downloading the file from

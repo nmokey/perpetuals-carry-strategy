@@ -7,7 +7,8 @@ provide adequately calibrated study-year uncertainty. This is not a validated en
 
 The design acceptance criterion's synthetic recovery component is met. Real predictive
 adequacy remains unestablished; do not label the statistical model validated simply because
-code tests pass. M6-T3 rolling evaluation is the next implementation task.
+code tests pass. M6-T3 rolling evaluation subsequently completed; see [its findings](M6-T3-rolling-funding.md)
+and [current readiness](../current-status.md). The frozen-fit findings here remain historical.
 
 ## Study and method
 Existing window unchanged: July 1–September 30, 2025 warmup (276 settlements), October 1,

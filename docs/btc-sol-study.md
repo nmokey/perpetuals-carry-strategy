@@ -23,7 +23,8 @@ Any tuning is confined to warm-up or nested training folds, never the scored fut
 Machine-readable settings and the separate hypothesis ledger are in `config/btc-sol-study.toml`.
 The [data-options discussion record](btc-sol-data-options.md) explains reconstruction versus
 trade replay, sampled-day evidence, inferred costs, and prospective live collection. These
-alternatives have been logged; no new headline execution mode or ADV source is selected.
+alternatives are recorded; D-039 selects monthly-calibrated inferred execution and D-040
+selects verified futures-bar ADV. See [current status](current-status.md) for readiness.
 Active research data belongs in `data/btc-sol` via `PERPCARRY_DATA_ROOT`; existing test data stays
 under the previous data root. Do not restart a `0GUSDT` bulk pull.
 
@@ -56,7 +57,11 @@ An available archive can still contain holes. Downloads must pass checksums wher
 partition/date/ordering checks, trade-volume reconciliation and independent book replay before
 being admitted to calibration or a scored fold.
 
-## Verified acquisition and current defects (2026-10-08)
+## Acquisition baseline and defects (historical snapshot, 2026-10-08)
+
+The following records the initial acquisition. The cooldown and zero-book status below
+are superseded by the [2026-10-11 status](current-status.md); raw-trade failures remain
+rejected. The active ADV alternative is now validated under D-040.
 
 Both funding series cover all 457 warmup/study days: 1,371 settlements per symbol, constant 8-hour cadence, no gaps including month boundaries. Both markets for both symbols have complete June 2025–September 2026 minute grids (487 days per series), verified source checksums and output hashes. Reports are under `data/btc-sol/reports/`.
 
@@ -96,9 +101,8 @@ Two execution-coverage choices are explicitly distinct; the user selected option
 
 The headline study uses continuous funding/prices with inferred execution costs. Full daily
 L2 is outside acquisition scope. Validate the sampled books, prior impact fits and spread/hedge
-cost assumptions before results. Existing bars contain base/quote volume; evaluate a validated
-bar-derived ADV contract before expanding raw trades. The current trade-derived contract
-remains in force until that implementation and validation change is completed.
+cost assumptions before results. D-040 now supplies validated futures-bar ADV for the active study. Raw-trade defaults
+remain available, but full raw-trade acquisition is not needed for this selected method.
 
 ## Engineering and model requirements
 
@@ -157,7 +161,10 @@ reference price. Test that consistency rather than setting position size to $210
 report book updates, trades and reference rows separately; exclude repeat replays, synthetic stress
 events and size-sweep repetitions from the unique-source total. Negative or lower results are valid.
 
-## 2026-10-10 acquisition restart
+## 2026-10-10 acquisition restart (historical launch record)
+
+For subsequent conversion and replay progress, read [current status](current-status.md)
+and the local worker reports; the launch counts below are not current coverage.
 On explicit user instruction, first-of-month updates and top-25 references are being
 acquired sequentially for BTC/SOL, July 2025–September 2026 (60 archives). The July 1
 BTC update download succeeded (491,233,472 compressed bytes); structural conversion and

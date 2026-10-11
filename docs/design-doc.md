@@ -1,7 +1,7 @@
 # Design Document: PerpCarry
 ## Funding-Rate-Aware Execution Cost Analysis for Crypto Perpetual Futures
 
-**Status:** Active BTC/SOL scope, updated 2026-10-10; M0–M4 engineering retained, M5-T1–T3 implemented with real fits gated; M6-T1–T3 implemented and causally verified; predictive adequacy remains open; M7-T1/T2/T4 rules, sizing and accounting implemented; T3 walk-forward integration next.
+**Status:** Active BTC/SOL scope, updated 2026-10-11; M0–M7 engineering implemented; actual BTC/SOL impact fits and research-input/model admission remain gated; M8 has not started. See [current status](current-status.md).
 **Author:** Ryan Zheng
 **Purpose:** Seed document for spec-driven development. Each task in Section 5 is intended to become one implementation spec/ticket. Open decisions in Section 6 should be resolved (or explicitly deferred with a documented default) before specs are written for the milestones they affect.
 
@@ -161,10 +161,12 @@ funding_interval_hours, last_funding_rate`.
 | `funding_rate` | float64 | Source column `last_funding_rate`; e.g. `0.0001` = 1 bp |
 | `funding_interval_hours` | int32 | **Not a constant, and not even a per-symbol constant.** Measured: majors 8h; `1000BONKUSDT` 4h; `0GUSDT` ran 4h at listing, 1h from 2025-09-22, 4h again by 2026-06. Required to annualise — read it per row, never per symbol |
 
-**`mark_price` is deliberately absent.** It was specified in an earlier draft, but the venue does
-not publish it alongside funding history. M7-T4 now requires a separately admitted actual
-settlement mark; this coverage remains missing. Source it independently (for example, evaluate
-`markPriceKlines` granularity) before research accounting; trade-price bars are not a substitute.
+**`mark_price` is deliberately absent.** It was specified in an earlier draft, but the downloadable funding archive does
+not publish it alongside rates. The separate funding-history API includes an associated
+markPrice, but access is blocked from this host. M7-T4 now requires a separately admitted actual
+settlement mark; this coverage remains missing. MarkPriceKlines minute bars are acquired, but do not certify the exact charge mark.
+Obtain exact evidence or select an explicit proxy/sensitivity before research accounting;
+trade-price bars are not a substitute.
 
 ### 3.4 Storage
 
@@ -427,8 +429,12 @@ Status: **RESOLVED 2026-10-08**, D-026. Supersedes the deferred-selection recomm
 **OD-4 — Spot leg treatment**
 *Affects: M7, M8.*
 Context: A true cash-and-carry trade has a spot (or second futures) leg. Fully modeling its execution cost doubles scope.
-Recommendation: Treat spot/index as a frictionless reference price for v1; the perp leg's execution cost is the novel contribution. State this simplification explicitly.
-Status: OPEN, leaning frictionless-spot.
+Original recommendation (not an admitted research policy): use a frictionless spot/index
+reference for v1. The implemented M7 path instead requires explicit spot fills and costs;
+any frictionless sensitivity must be labeled. The perp execution leg remains the focus.
+Status: **RESEARCH POLICY OPEN.** M7 implements explicit spot fills, quote-equivalent fees
+and supplied execution-cost scenarios (D-037/D-038). Historical spot cost, commission-asset
+and capital treatment still require a dated research policy; no frictionless base case is admitted.
 
 **OD-5 — Order book reconstruction fidelity**
 *Affects: M2-T1.*
@@ -494,8 +500,10 @@ content. There is no API for *historical* schedules even where the venue is reac
 a rounding detail — taker fees are of the same order as the funding edge, so the fee assumption can
 flip the sign of the headline result.
 
-Status: **RESOLVED 2026-08-12 — treat the fee as a swept parameter, with a manually sourced dated
-schedule as the base case.** Concretely: commit a small dated fee table with citations for the base
+Status: **ENGINEERING RESOLVED; research evidence remains open.** D-037 implements
+accounting and opt-in fee sensitivities. The original 2026-08-12 methodology was to
+treat fees as a swept parameter, with a manually sourced dated
+schedule as the base case. Concretely: commit a small dated fee table with citations for the base
 case, and report the capacity answer as a function of fee level across a plausible range. This
 converts an unavoidable data gap into a sensitivity result, which is a stronger artifact than a
 hidden assumption, and it directly serves the project's "honest about limitations" stance.
@@ -585,6 +593,8 @@ perpcarry/
 │       │   ├── fetch_trades.py
 │       │   ├── fetch_funding.py
 │       │   ├── fetch_book.py
+│       │   ├── fetch_price_bars.py
+│       │   ├── fetch_mark_prices.py
 │       │   ├── derive_symbol_meta.py
 │       │   ├── fetch_klines.py      # M4-T3: independent volume reference (D-022)
 │       │   └── validate_data.py
@@ -592,15 +602,25 @@ perpcarry/
 │       │   ├── order_size.py        # M4-T3: %ADV and %depth
 │       │   ├── impact_model.py      # M5-T2 chronological fitting + diagnostics
 │       │   ├── impact_model_io.py   # M5-T3 versioned per-symbol JSON + strict loader
-│       │   └── funding_model.py     # M6, not yet written
+│       │   ├── funding_model.py     # M6-T2 conjugate AR(1) inference
+│       │   ├── rolling_funding.py   # M6-T3 causal rolling forecasts
+│       │   ├── calibration_dataset.py # M5-T1 replay/simulation datasets
+│       │   └── bar_volume.py        # D-040 exact futures-bar ADV
 │       ├── strategy/
-│       │   ├── carry_strategy.py
-│       │   └── backtest.py
+│       │   ├── carry.py            # M7-T1 evidence-gated decisions
+│       │   ├── costs.py / funding.py # admitted M5/M6 inputs
+│       │   ├── sizing.py           # M7-T2 supported sizing/capacity
+│       │   ├── accounting.py / fees.py # M7-T4 settlement accounting
+│       │   └── walk_forward.py / execution.py # M7-T3 event loop/backends
 │       ├── reporting/
-│       │   └── plots.py
+│       │   ├── funding_eda.py
+│       │   ├── funding_model.py
+│       │   └── rolling_funding.py
 │       └── tools/
 │           ├── export_book.py       # corpus -> CSV for the M2-T2 harness (D-018)
-│           └── run_pipeline.py      # M3-T3: corpus -> pipeline -> checkpoint digest
+│           ├── run_pipeline.py      # M3-T3: corpus -> pipeline -> checkpoint digest
+│           ├── audit_bar_volume.py  # D-040 volume provenance
+│           └── run_backtest.py      # M7-T3 local manifest runner
 ├── tests/                 # pytest suite mirroring python/
 ├── data/                  # gitignored, local Parquet storage
 ├── notebooks/             # exploratory analysis
@@ -615,16 +635,18 @@ perpcarry/
 
 - **C++17/20**, CMake, pybind11, Catch2, ThreadSanitizer (for M3-T2 concurrency validation)
 - **Python 3.12+** (narrowed from 3.11+ to what CI actually exercises — see D-008), managed via `uv`; pandas/polars for data wrangling; statsmodels/scikit-learn for regression; PyMC (optional, M6 stretch) or hand-rolled conjugate updating for Bayesian inference; matplotlib/plotly for reporting
-- **Storage:** Parquet via PyArrow, DuckDB as an optional query layer. Budget ~5.4 GB/year
-  compressed for order book data at the one-day-per-month cadence; trades and funding are small.
+- **Storage:** Parquet via PyArrow, DuckDB as an optional query layer. BTC/SOL sample-book storage was estimated at roughly 30–40 GB
+  including compressed archives and Parquet; it is an acquisition estimate, not a measured
+  final total. Use current filesystem measurements, including staging/export overhead.
   **Arrow C++ is deliberately not a dependency** — Python does all Parquet I/O and hands batches
   to the core over pybind11 (D-012), so the C++ side reads no files.
 - **External data:** `data.binance.vision` S3 archive (trades, funding, klines) and the Tardis.dev
   free tier (`incremental_book_L2`, `book_snapshot_25`). Both are static file downloads over
-  HTTPS — no venue API, no credentials, no rate-limit handling. An HTTP client is therefore a
+  HTTPS. Free sample downloads need no credentials; respect vendor 429 Retry-After
+  deadlines. Paid metadata/history may require credentials and is not assumed available. An HTTP client is therefore a
   project dependency (M0-T6); the live venue API is unreachable from the development location.
-- **CI:** GitHub Actions — ruff + pytest + `ctest` on Linux and macOS per push/PR; heavy checks
-  (TSan, full backtests, reproducibility gate) deferred to a nightly tier. CMake and Ninja are
+- **CI:** GitHub Actions — ruff + pytest + `ctest` on Linux and macOS on main pushes/PRs; queue ThreadSanitizer runs per PR on Linux.
+  Full backtests and a research reproducibility gate remain planned for a nightly tier. CMake and Ninja are
   installed as venv dev dependencies rather than system packages, so runners need only `uv`.
 
 ## 11. Glossary

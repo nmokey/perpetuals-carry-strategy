@@ -17,14 +17,14 @@ When an OD is resolved, update both the table below *and* the Status line in the
 | OD-1 | Exchange/venue selection | **RESOLVED 2026-08-12** — Binance USD-M | M1 |
 | OD-2 | Historical L2 book acquisition | **RESOLVED 2026-08-12** — Tardis free tier (option d) | M1-T3 → everything downstream |
 | OD-3 | Symbol selection | **RESOLVED 2026-10-08** — BTCUSDT and SOLUSDT, D-026 | M8-T2 |
-| OD-4 | Spot leg treatment | OPEN, leaning frictionless spot | M7, M8 |
+| OD-4 | Spot leg treatment | **RESEARCH POLICY OPEN** — explicit spot fills/quote fees implemented, D-037/D-038; historical execution, fee-asset and capital policy unadmitted | M8 research admission |
 | OD-5 | Book reconstruction fidelity | **RESOLVED 2026-08-22** — L2, see D-017 | M2-T1 |
 | OD-6 | Concurrency model | **RESOLVED 2026-08-29** — (b) single-threaded core + SPSC queue, see D-020 | M3-T2 |
 | OD-7 | Impact model functional form | **UPDATED 2026-10-08** — primary square-root, linear diagnostic; D-026 retains D-024 caveats | M5-T2 |
 | OD-8 | Bayesian inference method | **RESOLVED 2026-10-08** — closed-form Bayesian AR(1), D-026 | M6-T2 |
 | OD-9 | Entry/exit threshold policy | **ENGINEERING RESOLVED 2026-10-10** — configurable Bayesian cost-adjusted gate and fixed-horizon exits, D-035; dated research parameter selection pending | Headline runs |
 | OD-10 | Position sizing / capacity model | **ENGINEERING RESOLVED 2026-10-10** — constrained net-dollar optimum and separate supported break-even capacity, D-036 | Research evidence still gated |
-| OD-11 | Fee & funding settlement assumptions | **RESOLVED 2026-08-12** — fee as swept parameter + dated base-case table | M7-T4 |
+| OD-11 | Fee & funding settlement assumptions | **ENGINEERING RESOLVED** — accounting and explicit fee sensitivities implemented, D-037; historical fee base case and exact funding marks remain unverified | M8 research admission |
 | OD-12 | Backtest validation methodology | **RESOLVED 2026-10-08** — common 12-month walk-forward window, D-026 | M7-T3 |
 | OD-13 | Build tooling | **RESOLVED 2026-08-12** — see D-001 | M0 |
 | OD-14 | Data storage format | **RESOLVED 2026-08-12** — Parquet/PyArrow, DuckDB optional | M0-T4, M1 |

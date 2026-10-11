@@ -47,9 +47,11 @@ calc_time,funding_interval_hours,last_funding_rate
 
 **Both deviations are now resolved in the design doc; §3.3 has been amended to match reality.**
 
-**`mark_price` is dropped.** The archive does not carry it, and it is unused before M7-T4 — which
-should source settlement price from `markPriceKlines` at that point rather than carrying a
-mostly-unused column through the whole pipeline. Do not emit the column as null.
+**`mark_price` is absent from the funding archive.** Do not emit a fabricated/null column.
+M7-T4 now needs separately admitted settlement marks. MarkPriceKlines minute bars have
+been acquired, but are not certified charge marks. The distinct funding-history API
+provides an associated markPrice and is blocked on this host. Exact exports or a declared
+proxy/sensitivity remain research work; see `../../analysis/btc-sol-mark-prices.md`.
 
 **`funding_interval_hours` is carried through.** It is per-symbol and not a constant 8 (OD-3's
 altcoin may differ), and the strategy cannot annualise without it. Nothing anywhere may hard-code

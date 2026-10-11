@@ -22,6 +22,30 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-11 — Documentation readiness refresh
+
+Audited current guidance against code, study config, Git publication state and local
+worker reports. Corrected stale T3/T4 sequencing, pending scope/ADV choice, unpublished
+status, completed price acquisition and funding-archive versus API mark distinctions.
+Added `current-status.md`; active blockers now separate remaining research gates from
+completed engineering. Historical audits/spec measurements retain explicit date/scope
+labels; no earlier test result or research finding was rewritten as a current result.
+
+The final check confirms 60/60 archives converted and passing replay reports for
+all 30 expected symbol-days: 2,310,540,096 update events and 51,694,674 reference
+images. Acquisition completed at 2026-10-11 11:15:55 UTC. The validator’s last update
+was 11:17:39 UTC; it exited `waiting_acquisition` after the acquisition process ended,
+although its completed list covers all expected days. Both workers are stopped.
+These are standalone sample-replay counts, not throughput or annual book coverage.
+
+No actual impact fit, funding adequacy approval, settlement proxy, fee policy or
+performance claim is introduced. Prior task commits are merged into main at
+`46baf50`; this refresh is a separate documentation task. Validation: local links
+and code fences checked across all 51 Markdown files; calibration/fit CLI flags
+verified against actual help; Ruff lint/format and whitespace checks passed. No
+Python/C++ suite rerun for Markdown-only changes; preceding 835/85 results remain
+dated evidence. No raw data, worker changes or downloads are part of this refresh.
+
 ## 2026-10-10 — Explicit bar-derived ADV validated and integrated
 
 Validated 32 cached monthly futures price ZIPs and all 487 days per symbol with

@@ -1,5 +1,9 @@
 # Server acquisition and calibration workflow
 
+Current scope and coverage: [2026-10-11 readiness summary](current-status.md).
+Commands below describe individual stages. The 60-archive batch and 30 replay verdicts
+are complete; a fresh download/replay is not needed merely to repeat these instructions.
+
 The server rebuilds the corpus from archives; no data is copied from the previous machine.
 Keep the data root under the gitignored `data/`, or set `PERPCARRY_DATA_ROOT` to an absolute
 path on approved storage. Archive downloads, temporary exports and reports follow that root.
@@ -33,7 +37,7 @@ not a reason to weaken the queue's test or change CI.
 
 ## Active BTC/SOL corpus
 
-Use `config/btc-sol-study.toml` and `docs/btc-sol-study.md` as the scope of record. Scored dates are 2025-10-01 through 2026-09-30; warmup starts July 2025, and June trade/price prehistory supports July ADV. No further 0G downloads are authorized by the active scope; keep existing 0G data for regression testing.
+Use `config/btc-sol-study.toml` and `docs/btc-sol-study.md` as the scope of record. Scored dates are 2025-10-01 through 2026-09-30; warmup starts July 2025, and June futures-bar volume prehistory supports July ADV (D-040). No further 0G downloads are authorized by the active scope; keep existing 0G data for regression testing.
 
 Set the research root once in the shell:
 
@@ -47,7 +51,10 @@ uv run python -m perpcarry.ingestion.fetch_price_bars --symbol SOLUSDT --start 2
 
 Price ingestion verifies complete UTC minute grids and hashes for both spot and futures. Their caches and partitions are separate; spot microseconds are normalized to milliseconds. `available_at` is after the minute closes, so current-bar values cannot be used early. These bars are valuation inputs, not observed execution books or historical mark prices. Reports live under the active root's `reports/`.
 
-Monthly trades currently materialize a full archive. Use the bounded daily path and measure representative days before scaling; do not run the old bulk monthly trade commands for BTC/SOL:
+Raw-trade pilots are optional reconciliation work, not a full-study download prerequisite.
+Monthly trades materialize a full archive; use the bounded daily path for additional
+explicitly scoped pilots. The commands below are examples, not instructions to duplicate
+completed book partitions:
 
 ```bash
 uv run python -m perpcarry.tools.benchmark_trades --symbol BTCUSDT --date 2025-10-01
@@ -56,7 +63,10 @@ uv run python -m perpcarry.ingestion.fetch_book --symbol BTCUSDT --start 2025-07
 uv run python -m perpcarry.ingestion.fetch_book --symbol SOLUSDT --start 2025-07-01 --end 2025-07-01
 ```
 
-A trade day is stored only after exact independent volume and ID integrity checks. A pilot does not establish complete ADV coverage. Acquire all prior required days before calibration. Sampled books are paired full-day L2/reference datasets; only first-of-month dates are public. Full scored daily replay needs additional access. Headline replay versus inferred execution costs is pending user choice.
+A raw-trade day is stored only after exact volume and ID-integrity checks. The active
+study instead opts into verified futures-bar ADV (D-040); full raw trades are unnecessary.
+Sampled books are paired full-day L2/reference feeds. D-039 selects inferred execution
+calibrated on prior samples and excludes continuous daily L2. See current-status.md.
 
 These commands replace partitions. Avoid overlapping writes to the same symbol/day or market/month. Changed data invalidate previous evidence hashes. Keep source archives and raw book exports ignored; never copy them to CI. The historical 0G October 10 volume defect remains rejected and is not allowlisted.
 
@@ -70,14 +80,17 @@ is supplied. Vendor raw rows must never be committed or reach CI.
 ```bash
 uv run python -m perpcarry.tools.validate_book --symbol BTCUSDT --date 2025-07-01
 uv run python -m perpcarry.tools.corpus_inventory --reconcile-volume
-uv run python -m perpcarry.models.calibration_dataset --symbol BTCUSDT --date 2025-07-01
+uv run python -m perpcarry.models.calibration_dataset --symbol BTCUSDT --date 2025-07-01 --adv-source futures_bars
 ```
 
 `$PERPCARRY_DATA_ROOT/reports/corpus.json` records partition dates, rows, sizes and hashes, the complete quality
 report, and calibration eligibility with reasons. Reconciliation is exact, not tolerance-based.
-Allowlisted failures remain excluded from calibration. A report without reconciliation cannot
-authorize the ADV input. Full-day independent book replay is also required, with matching hashes
-for both the incremental feed and its reference snapshots.
+Allowlisted failures remain excluded from calibration. The inventory eligibility field
+still evaluates the default raw-trade route, so sparse trades can make that field false.
+It is not the admission verdict for `--adv-source futures_bars`: that explicit route
+rechecks cached futures archives and regenerated ADV provenance, plus corpus book
+quality and full-day replay hashes for updates/references. Refresh the quality report
+after stable completed partitions; avoid hashing partitions being replaced by acquisition.
 
 M5-T1 writes one deterministic `part-0.parquet` and `manifest.json` per symbol-day under
 `$PERPCARRY_DATA_ROOT/calibration/`. Defaults are 40 log-spaced sizes from 0.001% to 10% ADV, buy orders, static
@@ -96,8 +109,13 @@ After generating eligible BTC/SOL calibration days, fit one explicit chronologic
 
 ```bash
 uv run python -m perpcarry.models.impact_model --symbol BTCUSDT --symbol SOLUSDT \
-  --train-end 2025-10-01 --test-end 2025-11-01 --train-days 90
+  --train-end 2025-09-01 --test-end 2025-10-01 --train-days 60
 ```
+
+This example ends all training and held-out validation before the October fold. Its
+60-day training plus September validation fits the configured 90-day total window;
+90 training days plus later validation would not. These dates illustrate chronology,
+not an admitted research split. Generation and validation must succeed first.
 
 The cutoff is exclusive for training; testing ends exclusively at `--test-end`. All days
 stay in one split. Models are separate by symbol/side/schedule/depth and training-only
@@ -115,8 +133,8 @@ Once calibration admission succeeds, add an explicit per-fold destination:
 
 ```bash
 uv run python -m perpcarry.models.impact_model --symbol BTCUSDT --symbol SOLUSDT \
-  --train-end 2025-10-01 --test-end 2025-11-01 --train-days 90 \
-  --model-dir models/train-end=2025-10-01_test-end=2025-11-01
+  --train-end 2025-09-01 --test-end 2025-10-01 --train-days 60 \
+  --model-dir models/train-end=2025-09-01_test-end=2025-10-01
 ```
 
 This writes `impact_BTCUSDT.json` and `impact_SOLUSDT.json` with schema version,
@@ -130,8 +148,8 @@ requires explicit side, schedule, depth and size regime; missing strata raise in
 of substituting a law. Returned diagnostic or negative laws retain their form and
 usability flags in the artifact. M7-T1 consumes admitted primary laws through
 `strategy.costs.from_artifact(...)`; synthetic/default, depth, size and chronology gates
-remain explicit. M7-T2 sizing and T4 accounting are implemented; next is T3 integration; weekly predictive
-adequacy is not cleared.
+remain explicit. M7-T1–T4 engineering, including T3 integration, is implemented. Weekly predictive
+adequacy remains unestablished; actual research manifests and M8 runs remain gated.
 
 ## M6-T1 funding analysis
 
@@ -216,8 +234,8 @@ Held positions keep their original planned horizon. Pass forecasts and costs for
 remaining settlements, with entry costs excluded from continuation. Missing or rejected
 evidence returns wait when flat and exit intent when held; an intent is not a fill.
 Synthetic examples and integration coverage: `uv run pytest tests/strategy -q`.
-Next: T3 walk-forward integration; dated research parameters, cost/adequacy evidence and
-executable metadata remain necessary before a full walk-forward run.
+Next: actual BTC/SOL calibration and research-input admission for M8; dated parameters,
+cost/adequacy evidence and executable metadata remain required.
 
 ## M7-T2 sizing (library only)
 

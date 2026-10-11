@@ -1,5 +1,10 @@
 # M5-T2 — Fit impact model(s)
 
+**2026-10-11 readiness:** All expected BTC/SOL samples have passing replay reports and
+futures-bar ADV is complete. Generate admitted calibration rows before actual fits. Historical 0G
+overlap/R² discussion below is not the current server corpus; see
+[status](../../current-status.md) and [D-040 volume evidence](../../analysis/bar-volume-adv.md).
+
 **Milestone:** M5
 **Status:** Implemented 2026-10-09; synthetic verification complete, BTC/SOL research fits data-gated
 **Depends on:** M5-T1; OD-7 (primary square-root, linear/power diagnostics; D-026/D-029)

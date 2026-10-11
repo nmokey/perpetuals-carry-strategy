@@ -13,8 +13,9 @@ See [the study plan](docs/btc-sol-study.md) and [configuration](config/btc-sol-s
 The figures **0.04% ADV / $210K capacity, 0.8 net Sharpe, 2.1 gross Sharpe and 400M+ events are
 claims to test, not results**. Existing `0GUSDT` data remains for engineering tests; its backfill
 has stopped. First-of-month full-day books support sparse calibration, not continuous daily
-execution replay. The headline execution-coverage choice is pending; the study plan identifies
-the extra data needed for daily replay and the limitations of inferred execution costs.
+execution replay. The selected study uses monthly-calibrated inferred costs with continuous funding/prices;
+continuous daily books are excluded. Verified futures-bar volume supplies prior-30-day ADV.
+See [current readiness and coverage](docs/current-status.md) for remaining gates.
 
 **Research question:** for a given perpetual futures market, does the funding-rate carry edge
 remain positive after realistically modeled slippage and fees — and how does that answer change
@@ -35,12 +36,14 @@ order book** downloaders, symbol tick/step derivation committed as a reviewed lo
 corpus-level **data validation** pass usable as a gate.
 
 The C++ core reconstructs an L2 book from the vendor's snapshot-and-diff feed, and the replay is
-checked against the vendor's *independently constructed* top-25 snapshots: 564,783 book images
-across two symbols, zero mismatches, exact equality with no tolerance. A failed comparison renders
+checked against the vendor's *independently constructed* top-25 snapshots. The original
+engineering validation compared 564,783 images across two symbols with zero mismatches;
+current BTC/SOL sample validation is tracked separately in [current status](docs/current-status.md).
+The criterion is exact equality with no tolerance. A failed comparison renders
 as a side-by-side ladder rather than a boolean.
 
 The pipeline is assembled end to end — Parquet → PyArrow → pybind11 → replay → lock-free SPSC queue
-→ consumer. One real symbol-day replays in ~3.5s, reproducing the validated event count exactly,
+→ consumer. The historical 0G engineering symbol-day replayed in ~3.5s, reproducing its validated event count exactly,
 and the resulting book digest is identical across runs and across an 8192× change in queue capacity.
 
 **M4 is complete too.** The impact simulator walks the reconstructed book to price a hypothetical
@@ -49,7 +52,8 @@ that compare across symbols (% of average daily volume, % of visible depth).
 
 One result from it is worth stating up front, because it shapes how the eventual capacity answer
 must be read: **the vendor's reference data validates only the top 25 book levels, and orders above
-roughly 0.25–0.9% of ADV walk deeper than that.** So the small-order end of the capacity curve rests
+roughly 0.25–0.9% of ADV walked deeper than that in the historical 0G pilot.
+Those boundaries are not verified BTC/SOL capacity limits.** So the small-order end of the capacity curve rests
 on independently validated book state and most of the interesting range does not. Every simulated
 fill reports whether it crossed that line, so the distinction survives into the results rather than
 living in a footnote.
@@ -86,7 +90,7 @@ are geo-blocked from the development location. Nothing needs to run continuously
 Active BTC/SOL acquisition uses `PERPCARRY_DATA_ROOT=data/btc-sol`; completed data under the
 previous root is retained for testing. Follow [the server workflow](docs/server-workflow.md).
 The [code organization audit](docs/codebase-audit.md) records the cleanup and remaining
-maintenance work before M6.
+maintenance work identified before M6 implementation; its dated findings are historical.
 
 ## Layout
 
@@ -136,7 +140,7 @@ configure needs network access).
 
 ## CI
 
-GitHub Actions runs both build paths on every push and pull request, across Linux and macOS:
+GitHub Actions runs both build paths on pushes to main and pull requests, across Linux and macOS:
 
 - **`python`** — `uv sync --locked` (which compiles the extension), then ruff and pytest
 - **`cpp`** — standalone CMake configure/build, then `ctest`

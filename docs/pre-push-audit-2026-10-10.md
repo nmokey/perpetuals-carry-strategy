@@ -1,5 +1,9 @@
 # Accumulated changes audit — 2026-10-10
 
+Historical publication audit through M7-T2. Later T4/T3 and data tasks were merged
+into main at `46baf50`; [current status](current-status.md) supersedes the next-task
+and coverage statements below, preserving this audit’s original checks and limits.
+
 Reviewed the server work since `45d8ff2`: BTC/SOL study scope and acquisition/validation
 helpers, shared replay/storage organization, M5 calibration/fitting/serialization, M6
 funding diagnostics/rolling forecasts, and M7-T1/T2 decisions/sizing. User explicitly

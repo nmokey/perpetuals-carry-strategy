@@ -1,9 +1,12 @@
 # Code organization audit — 2026-10-09
 
+Historical audit of organization before M6 implementation. Subsequent M6/M7 work is
+complete; use [current status](current-status.md) for the active milestone and gates.
+
 The existing C++ core has clear ownership and I/O boundaries. The main maintainability
 problem was in the newer Python code: reusable calibration depended on command-line
 tools and their private helpers. That dependency direction is now corrected, with
-regression checks covering the moved behavior. M6 remains unimplemented.
+regression checks covering the moved behavior. M6 was unimplemented at the time of this audit.
 
 ## Findings and changes
 

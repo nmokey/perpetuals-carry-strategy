@@ -93,9 +93,10 @@ forecasts byte-for-byte unchanged; exact manual path replication checks the simu
 Repeated real-data report bytes match. Ruff lint/format, architecture checks and whitespace
 checks pass. No C++ changes or rerun; 85 C++ tests last passed during the organization audit.
 
-## Next
-M7-T1 entry/exit logic follows M6 engineering. First specify OD-9's probability threshold,
-holding horizon and exit policy, with a defensible treatment of B-012's predictive failures.
-Do not infer those choices from these descriptive study-year results. Execution calibration,
-continuous book coverage, contract metadata and accounting gates B-009–B-011 also remain
-open. No strategy P&L, Sharpe, capacity, or success claim is produced here.
+## Current follow-up (2026-10-11)
+M7-T1–T4 engineering is now complete, including configurable thresholds, fixed horizons,
+sizing and accounting. Dated research parameters and treatment of B-012’s predictive
+failures remain open; do not choose them from scored-year findings. D-039 selects
+inferred execution from prior monthly samples; continuous daily books are excluded.
+Actual impact fits, funding marks, fees, contract and capital admission still gate M8.
+See [current status](../current-status.md). No strategy performance result is produced here.

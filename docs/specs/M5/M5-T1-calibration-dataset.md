@@ -12,7 +12,7 @@ This is the task that turns a simulator into data. Everything downstream — the
 the entry threshold, the capacity curve — is a function of this dataset, so its coverage bounds what
 the project can honestly claim more tightly than any modelling choice does.
 
-The server implementation writes deterministic row-level Parquet and an evidence manifest. It advances C++ replay through the lock-free Pipeline, copies consumer state, and simulates static and sliced execution without advancing the entry book using future data. Complete prior ADV, exact volume reconciliation, and hash-bound full-day independent book validation are mandatory. Existing 0G engineering data remain useful for testing; active calibration is BTC/SOL under `docs/btc-sol-study.md`.
+The server implementation writes deterministic row-level Parquet and an evidence manifest. It advances C++ replay through the lock-free Pipeline, copies consumer state, and simulates static and sliced execution without advancing the entry book using future data. Complete prior ADV and hash-bound full-day independent book validation are mandatory. The raw-trade default additionally requires exact volume reconciliation. D-040’s explicit `futures_bars` route revalidates original bar archives and causal ADV provenance without unused raw-trade prerequisites. Existing 0G engineering data remain useful for testing; active calibration is BTC/SOL under `docs/btc-sol-study.md`.
 
 ## Acceptance criteria
 
@@ -42,8 +42,10 @@ and samples from it, which is the same shape as M4-T2 and the same place look-ah
 
 **2026-10-08 correction:** the table below describes historical book/trades overlap, not verified
 calibration eligibility. Consult `blockers.md` for the later reported pull and unresolved quality
-gap; verify complete prior ADV windows before counting usable days. The current checkout has no
-corpus available to check.
+gap; verify complete prior ADV windows before counting usable days. That pre-acquisition checkout had no corpus available to check. The server now has
+validated BTC/SOL sample days and complete futures-bar ADV; current coverage is in
+[the readiness summary](../../current-status.md). Refresh book quality before generation;
+no actual BTC/SOL calibration dataset or fit is claimed yet.
 
 **Historical corpus snapshot, 2026-08-30:**
 
@@ -98,7 +100,9 @@ impossible, and there is no reason to find out.
 
 ## Data
 
-- **In:** `data/book/symbol=.../date=...` (replayed), `data/trades/...` (ADV, via M4-T3).
+- **In:** book partitions and hash-bound corpus/replay reports under the selected data root;
+  raw-trade ADV by default, or verified original futures-bar archives plus price-ingestion
+  reports when explicitly selecting `futures_bars` (D-040). Active root: `data/btc-sol`.
 - **Out:** `data/calibration/symbol=.../date=...` Parquet, plus a small JSON manifest recording
   configuration, corpus days used, and the code version — so a dataset can be traced to what made
   it.

@@ -1,8 +1,10 @@
 # BTC/SOL data options and research tradeoffs
 
 Discussion record, **2026-10-08**. This records the considerations and alternatives discussed
-after the server acquisition. It does **not** select a new execution mode, change the study
-window or ADV source, authorize a purchase, or start a live collector.
+after the server acquisition, updated 2026-10-11 to reflect D-039/D-040. The user has
+selected monthly-calibrated inferred costs and verified futures-bar ADV; the fixed window
+is unchanged. Alternatives below do not authorize purchases or start a live collector.
+See [current status](current-status.md).
 
 The research symbols remain BTCUSDT/SOLUSDT. The intended common scored window remains
 2025-10-01 through 2026-09-30, with July–September warmup and June volume prehistory.
@@ -52,9 +54,9 @@ describes first-day access and the separate update/snapshot datasets.
 | Research component | Inputs needed | Current source and consequence |
 |---|---|---|
 | Book reconstruction and sampled slippage | Book updates, initial state, validation references | Tardis alone can supply these; Binance trades are not needed to advance the book |
-| Capacity in %ADV | Complete strictly prior volume history | Existing implementation uses Binance trades for 30-day ADV; one book day cannot supply the prior window |
+| Capacity in %ADV | Complete strictly prior volume history | Active study uses exact Binance futures-bar base volume for strict prior-30-day ADV (D-040); raw trades remain the module default |
 | Rolling funding persistence | Continuous settled funding history | Downloaded Binance funding supports the Bayesian AR(1) research; a single book day is insufficient |
-| Carry P&L and gross/net Sharpe | Funding, aligned spot/perp prices, costs, capital and fee assumptions | Binance funding/price histories are available; execution/accounting remain incomplete |
+| Carry P&L and gross/net Sharpe | Funding, aligned spot/perp prices, costs, capital and fee assumptions | Binance funding/price histories are available; M7 execution/accounting engineering is complete; actual marks, costs and capital admission remain gated |
 | Prospective collection | Live book changes, snapshots and accompanying market data | Tardis live software connects directly to the exchange from the collection host |
 
 Both vendors are not inherently necessary for every experiment. An execution-only study
@@ -64,12 +66,11 @@ funding/prices. Tardis offers other data types too, but coverage and access woul
 be established before replacing existing inputs; the downloaded Binance histories remain
 useful under the sampled-book approaches.
 
-The four validated trade days per symbol are pilots, not full ADV coverage. Both October
-10 archives failed admission. Futures-bar volume is a possible alternative ADV input because
-complete price bars have been downloaded, but adopting it is an **unresolved contract change**:
-validate daily aggregation, units, UTC boundaries, volume quality and source disagreements,
-then document the provenance and implications. Do not silently substitute it or conceal the
-rejected trade days. The current generator still requires its existing trade-derived inputs.
+The four validated trade days per symbol remain pilots, and both October 10 archives
+remain rejected. D-040 explicitly admits verified futures-bar volume for active-study
+ADV: 487 volume days and 457 prior windows per symbol. Sparse trade cross-checks do
+not prove every daily total correct. M5 must opt in with `--adv-source futures_bars`;
+book quality/replay gates and downstream provenance checks remain required.
 
 ## Options and what each can claim
 
@@ -83,9 +84,9 @@ rejected trade days. The current generator still requires its existing trade-der
 
 The recommendation discussed was to combine sampled-day execution validation with a
 continuous funding/price prototype, then consider sampled-book calibrated costs for a
-clearly labeled model-based carry backtest. Checking full-year L2 access remains an option
-if observed-book execution throughout the year is required. **No option has been selected**;
-`execution.headline_coverage` remains `pending_user_choice`.
+clearly labeled model-based carry backtest. D-039 selects sampled-book calibrated inferred costs for the full-year study;
+`execution.headline_coverage` is `monthly_calibrated_inferred_costs`. Continuous daily
+books are outside the selected acquisition scope. Other options remain discussion history.
 
 Even continuous historical replay is a counterfactual execution simulation: the historical
 market did not observe our hypothetical orders. Preserve the sliced liquidity-depletion
@@ -135,18 +136,15 @@ gap detection, reinitialization after gaps, automatic restart and alerts/storage
 No persistent collector has been started. Live capture is future coverage, separate from
 paid access to already recorded history and from the fixed historical study.
 
-## Current boundaries and unresolved choices
+## Current boundaries and remaining gates (2026-10-11)
 
-- No BTC/SOL book day has yet passed independent replay in the active research root.
-  Completed 0G days support engineering tests, not BTC/SOL impact coefficients.
-- Complete funding and minute price histories do not imply complete execution/ADV inputs.
-  Exact trade-volume failures and SOL's historical grid disagreement remain recorded.
-- Choose the headline scope: full-year replay, inferred costs, or a sampled-day execution
-  deliverable alongside separate carry research. Do not silently shrink the common window.
-- Decide the volume contract explicitly if using bar-derived ADV; retain quality gates.
-- Fee tiers, spot execution assumptions, mark/index valuation and capital/collateral treatment
-  still need specification before headline net returns.
-- Preserve the C++ core and ingestion-to-consumer lock-free queue boundary under every option.
-- 0.04% ADV / $210K capacity, 0.8 net Sharpe, 2.1 gross Sharpe and 400M+ processed events
-  remain hypotheses. Do not count repeated replays/sweeps or synthetic events as unique
-  source coverage, or treat a high event count as evidence of year-round generalization.
+- BTC/SOL sample acquisition is complete and all 30 expected symbol-days passed replay.
+  Counts and timestamps are in [current status](current-status.md).
+- Execution scope and volume method are selected (D-039/D-040); full daily books and
+  a full raw-trade backfill are not required. The common study window is unchanged.
+- Actual prior impact fits, sparse-day/stress validation and funding adequacy remain open.
+- Exact settlement marks or a declared proxy, dated contract rules/fees, spot execution,
+  commission-asset and capital/collateral policy still gate headline results.
+- Preserve C++ reconstruction and the ingestion-to-consumer lock-free queue boundary.
+- Capacity, Sharpe and 400M-event figures remain hypotheses. Standalone sample replay
+  counts do not establish queue throughput or annual execution coverage.

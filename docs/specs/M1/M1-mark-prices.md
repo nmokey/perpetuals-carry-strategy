@@ -31,7 +31,7 @@ and cache collision; genuine downloads pass calendar checks, all 30 sources/chec
 and generated hashes are recorded locally. Inject faults in an isolated scratch copy
 and confirm named tests fail. No raw vendor rows enter git or CI; no book-worker edits.
 
-Source defect found during acquisition: June 2026's BTC monthly archive omits June 29.
+Source defect found during acquisition: June 2026's BTC and SOL monthly archives omit June 29.
 An explicitly recorded repair may combine a checksum-verified daily archive for each
 entire missing day with the monthly rows, then run the same complete-month checks.
 Repair only monotonic, unique, aligned, in-month monthly rows with whole missing days;

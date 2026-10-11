@@ -33,4 +33,5 @@ through existing dated sizing inputs. No raw trades are re-admitted by this path
 Verified: 42 scoped tests pass; all 16 scratch-injected defects produce named test
 failures. Both symbols have 487 checksum-verified complete UTC days, supporting all
 457 warmup/study daily windows. See `docs/analysis/bar-volume-adv.md` for evidence
-and limits. Independent book replay and actual BTC/SOL calibration remain pending.
+and limits. All 30 expected BTC/SOL sample days have passing replay reports; actual
+calibration/fits remain pending. See `../../current-status.md` for dated counts.

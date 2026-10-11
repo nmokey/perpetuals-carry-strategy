@@ -9,132 +9,62 @@ more useful record.
 
 ---
 
-## Active
+## Active (updated 2026-10-11)
 
-**2026-10-10 acquisition update:** first-of-month BTC/SOL acquisition resumed on explicit
-user instruction. The first July 1 BTC update archive returned 200; full conversion and
-paired reference/replay validation are pending. A sequential background worker covers
-all 15 monthly warmup/study days per symbol and stops on any new vendor cooldown.
-See the ignored `reports/monthly-book-acquisition.json` and `.log` under `data/btc-sol`
-for live completion; the earlier zero-book study report remains a prior inventory.
-Downloading free samples does not close continuous L2, ADV or model-admission gates.
+M7-T1–T4 engineering is complete and merged into main. M8 research runs remain gated.
+See [current status](current-status.md) for timestamped acquisition/validation counts.
+Earlier progress entries are historical, not current download instructions.
 
+### B-009 — Sample-calibrated inferred execution needs validation
 
-**2026-10-10 M7-T3 update:** chronological integration and synthetic end-to-end checks
-are implemented. The loop requires complete funding/decision calendars, actual settlement
-and valuation marks, explicit fees, prior ADV/metadata and admitted M5/M6 evidence. Its
-fixed collateral envelope is a scenario, not historical maintenance/liquidation policy.
-CLI coverage completion does not certify research inputs or daily return coverage.
-M8 BTC/SOL runs remain gated by B-009–B-012 and dated research policy selection. No real
-impact fit/funding approval, synthetic data substitute or headline result is introduced.
+D-039 resolves the scope: continuous funding/prices with execution costs calibrated
+strictly from completed prior monthly samples. Continuous daily L2 is excluded.
+All 60 sample archives are converted and all 30 expected symbol-days have passing
+replay reports. Refresh corpus quality, generate admitted BTC/SOL calibration rows,
+and fit/validate prior-fold square-root models. Spread/spot hedge cost assumptions
+and sparse-day/stress generalization remain required before capacity/net Sharpe claims.
+Passed top-25 replay does not certify deep levels or exact venue execution timing.
 
+### B-010 — Research marks, costs, capital and manifests remain incomplete
 
-**2026-10-10 M7-T4 update:** immutable fee/fill/funding and gross/net accounting is
-hand-reconciled. T3 integration can proceed on synthetic admitted inputs. The reference
-fee table is a cited sensitivity assumption, not verified historical base-case evidence.
-Settlement marks, historical fees, quote-versus-base spot commission treatment and
-collateral/maintenance policy remain B-010 gates. No research P&L or Sharpe is established.
+Funding, aligned spot/perp trade-price bars, futures-bar volume/ADV and mark-price bars
+are acquired and validated under their contracts. D-040 removes full raw-trade coverage
+as a requirement for the explicit active-study ADV route; rejected October 10 trade
+archives remain rejected. Preserve the raw-trade default for other callers.
 
-**2026-10-10 M7-T2 update:** constrained sizing and OD-10 mechanics are verified on
-synthetic inputs. No real BTC/SOL ADV/contract/depth record, fit or approval is invented.
-T4 accounting is now implemented; T3 integration is next. Actual input coverage, SOL metadata, historical policy
-selection and funding adequacy remain required; engineering does not clear these gates.
+Exact funding-charge marks remain unverified. Minute mark-bar opens are candidate
+proxies, not certified marks. Obtain authorized exports from an accessible source or
+explicitly select a proxy with payment sensitivity; no proxy has been adopted. Implement
+causal valuation adapters with explicit availability/staleness and daily equity coverage.
+The terminal M7 coverage check alone does not support daily-return Sharpe.
 
-### 2026-10-10 M7-T1 implementation note
+Select historical fee/account tier, discounts, spot commission asset and execution-cost
+treatment, capital/collateral policy and return denominator. The current fee reference is
+an explicit sensitivity assumption. M7 quote-equivalent accounting and fixed collateral
+scenarios are engineering implementations, not a historical venue wallet/liquidation model.
+Freeze dated policy choices and assemble evidence-bound M7 manifests before M8 runs.
 
-Configurable entry/exit mechanics are verified; no real funding-adequacy record or impact
-artifact exists for admitting BTC/SOL research entries. This is intentional admission gating,
-not a zero-trade performance finding. Before a headline run, select and record policy
-parameters using pre-study information and admit dated fees/spreads/hedge costs, depth,
-ADV/notional and contract constraints. T2 can proceed with synthetic sizing cases while
-OD-10 is specified. Land T4 accounting before the executable T3 loop to resolve the
-existing sequencing watch item. B-009–B-012 remain open.
+### B-011 — Historical executable contract rules remain unadmitted
 
-**2026-10-09 M5 update:** T1–T3 code and synthetic verification are implemented. B-009/B-010
-continue to block research fits and headline results, rather than implementation of the
-regression/serialization machinery. No BTC/SOL impact model has been fitted to admitted data.
-M6-T1–T3 funding engineering and M7-T1 decision mechanics are implemented. M7-T2
-sizing and T4 accounting are implemented; T3 integration is next. OD-9 requires a dated research parameter set before a
-headline run; no real funding approval is issued while B-012 is open. EDA and predictive results
-show varying stationarity diagnostics and a material SOL negative tail. These are inputs
-to posterior/predictive checks, not a blocker to implementing the specified first AR(1)
-model or justification to assume that model is adequate.
+An official notice announces SOL tick 0.001→0.01 before the study (2024-10-14). Rare
+early executions off 0.01 explain the empirical GCD of 0.001; grandfathered orders are
+a possible explanation, not proven. Traded granularity is distinct from accepted new-order
+ticks. SOL’s 2025-04-02 minimum-amount notice is not independent proof of lot step or
+minimum notional. BTC’s 100→50 USDT minimum-notional rollout starts 2026-04-14 06:30
+UTC over approximately four hours, without a verified exact boundary. Establish dated
+spot/perpetual filters and reconcile these gaps before sizing admission. Tardis metadata
+requests returned 401/pro-business-required. See
+[historical source evidence](analysis/historical-fees-contracts.md).
 
-### B-012 — Funding predictive adequacy remains unestablished (2026-10-09)
+### B-012 — Funding predictive adequacy remains unestablished
 
-**Blocks:** calling the funding model a calibrated strategy gate or claiming reliable
-probability thresholds. Does not block engineering of rolling/online forecasts or configurable M7 decisions. Synthetic AR(1)
-parameter recovery and exact inference checks pass; warmup conditional predictive checks
-are plausible. The frozen warmup fit undercovers the study (95% intervals cover 90.05% BTC,
-83.47% SOL) and underpredicts negative tails. BTC residual dependence also persists beyond
-lag one. Assess strictly causal rolling predictions, prior sensitivity, residual structure
-and downside calibration before strategy use. Do not tune to the claimed Sharpe/capacity.
-See `docs/analysis/M6-T2-bayesian-funding.md`.
-
-**2026-10-10 T3 update:** causal rolling updates are implemented and future-poisoning tests
-pass. Nominal 95% one-step coverage improves to 96.62% BTC/96.35% SOL, but monthly
-undercoverage and downside asymmetry remain. Weekly cumulative coverage is only
-73.77%/87.91%; prior sensitivity does not certify horizon probabilities. B-012 stays open.
-M7 policy must account for these failures before interpreting probability gates as calibrated.
-See `docs/analysis/M6-T3-rolling-funding.md`.
-
-### B-009 — Sample-calibrated inferred execution still needs validation
-
-**Scope choice resolved (D-039):** the user selected monthly-calibrated inferred execution
-and excluded continuous daily book acquisition. First-of-month feeds provide 12/365 scored
-days per symbol, plus three warmup days. Remaining gates are paired book replay validation,
-strictly prior impact fits, spread/spot execution assumptions and sparse-sample/stress
-validation. These block defensible headline capacity/Sharpe, not the choice of scope.
-Never describe the modeled year as observed-book replay, carry old books forward, or treat
-400M rows as temporal coverage. Full daily L2 is no longer an acquisition requirement.
-
-### B-010 — Research input and accounting gates are incomplete
-
-**2026-10-10 ADV update (D-040):** the active study uses verified futures-bar base
-volume and strict prior-30-day ADV, with 487 volume days and 457 feature windows
-validated per symbol. Full raw-trade coverage is not required for this explicit
-alternative. Raw-trade defaults/rejections remain unchanged; book input quality and
-replay gates still apply. Assemble dated M7 sizing evidence/manifests separately.
-
-
-**2026-10-10 mark-data update:** checksum-verified mark-price bars now cover all 457
-warmup/study days per symbol, with documented June 29 daily-archive repair. Exact
-funding settlement marks remain unverified; an open at the funding minute is not
-a certified charge mark. Valuation adapters must respect bar-close availability and
-explicit staleness, including the existing 16-second decision/terminal boundaries.
-See `analysis/btc-sol-mark-prices.md`; no settlement-proxy methodology was selected.
-
-
-BTC/SOL trades need full June 2025–September 2026 coverage and exact daily volume reconciliation. Both October 10, 2025 daily archives failed the gate and were not stored; this stress-day coverage must be repaired or an explicit alternative volume contract must be evaluated without suppressing the defect. The scored window remains fixed. Paired July 1 warmup book downloads returned 429 with a ~23-hour Retry-After; respect the cooldown before resuming sample validation.
-
-Combined funding audit passed for both symbols: 1,371 settlements over 457 days, constant 8-hour cadence, no month-boundary gaps. All four spot/futures price series cover June 2025–September 2026 with complete minute grids. Contract/minimum-notional constraints, fee tiers, mark/index valuation and capital/collateral accounting still need specification before M7 headline metrics.
-
-**T4 clarification (2026-10-10, D-037):** economic accounting is implemented, but existing
-minute trade-price grids are not actual funding settlement marks. Supply separately admitted
-marks and a historically defensible fee base case, with sensitivity runs. The committed
-`config/fee-reference.toml` uses current spot/hypothetical futures references; all study
-periods are labeled assumptions and rejected without explicit opt-in. Fee accounting uses
-USDT equivalents, without base-asset/BNB fee inventory or venue commission rounding.
-Capital is an explicit input; negative cash is reported, not repaired. Margin reservation,
-maintenance/liquidation, executable capital limits and return denominator remain research
-policy work. Gross/net equity outputs alone do not clear these gates.
-
-### B-011 — SOL historical tick grid disagrees across windows
-
-**2026-10-10 source audit:** an official notice announced SOL 0.001→0.01 tick on
-2024-10-14, before the study. Just 28/2,245,956 July executions and 41/3,097,739
-October executions are off the 0.01 grid; these rare prices explain the finer observed
-GCD. Grandfathered orders are a possible cause, not established. Execution-price
-granularity does not identify the tick accepted for new orders, and absence of a
-later indexed notice does not prove a constant regime. A separate 2025-04-02 notice
-sets minimum quantity to 0.01 SOL but does not independently certify lot step or
-minimum notional. BTC's 100→50 USDT minimum-notional rollout starts 2026-04-14
-06:30 UTC with an approximately four-hour implementation interval. Full historical
-filters, effective timing and fees remain unadmitted. See
-`analysis/historical-fees-contracts.md`; Tardis metadata access returned 401.
-
-
-Three disjoint sampled trade windows infer tick 0.001 on 2025-07-01 and 2025-10-01, but 0.01 on 2026-09-01; all infer quantity step 0.01. The metadata combiner correctly refuses one timeless record. This is observed grid disagreement, not yet a verified venue change date. Obtain/verify the historical transition and represent dated metadata regimes before executable sizing. Do not choose the finest tick or replace the last value globally. BTC grids agree across the same dates (tick 0.1, step 0.001); its committed provenance was refreshed.
+M6 inference/causal rolling forecasts pass engineering tests. Rolling nominal 95%
+one-step coverage is 96.62% BTC/96.35% SOL, but monthly/downside gaps and weak weekly
+cumulative coverage (73.77%/87.91%) remain. Prior sensitivity does not certify horizon
+probabilities. Assess horizon/downside calibration and defensible policy treatment before
+admitting a reliable probability entry gate; do not tune toward target Sharpe/capacity.
+See [rolling funding findings](analysis/M6-T3-rolling-funding.md). This gates research
+interpretation, not implementation of forecast or configurable decision mechanics.
 
 ### B-004 — Binance's REST/WS API is geo-blocked from this location; Bybit too
 
@@ -160,7 +90,7 @@ question, not a technical workaround.
 
 ---
 
-## Watch list
+## Watch list (historical entries; current scope overrides acquisition plans)
 
 **Historical pre-server audit (superseded by the BTC/SOL acquisition entry in `progress.md`) — supersedes the earlier costing claims below.** The current
 checkout has no data corpus available to verify. Earlier session reports describe 11 `0GUSDT`
@@ -257,7 +187,7 @@ Not blocking yet; will bite at the milestone named.
 
 - ~~**M7-T4 is sequenced after M7-T3, but T3 needs it.**~~ **Resolved 2026-10-10 (D-036):**
   T4 depends on T1/T2 and precedes T3; the loop depends on accounting. Acceptance criteria
-  and task IDs are unchanged. Accounting implementation is next.
+  and task IDs are unchanged. Accounting and T3 integration subsequently completed (2026-10-10).
 
 - **Funding cadence is not a symbol constant, and M6 assumes it is.** `0GUSDT` ran 4h at listing
   (2025-09-17), 1h from 2025-09-22, and 4h again by 2026-06. An AR(1) fit over a window whose
