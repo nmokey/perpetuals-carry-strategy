@@ -975,3 +975,27 @@ ADV before bulk raw-trade acquisition; this is an alternative awaiting an explic
 implemented and validated input contract, not permission to silently substitute or hide
 the October 10 trade-archive discrepancies. Historical settlement/valuation marks, fee
 and contract evidence remain acquisition/admission requirements under B-010/B-011.
+
+## D-040 — Explicit exact bar-volume ADV for the active study (2026-10-10)
+
+Use the already acquired Binance USD-M minute-bar base volume for the BTC/SOL study's
+ADV denominator, explicitly labeled `futures_bars`. Full raw trades are no longer an
+acquisition prerequisite for this method. Recheck original ZIPs against the recorded
+published checksums, complete ordered UTC grids and source identity; sum original
+decimal text and average the 30 completed UTC days preceding the decision's UTC day.
+All 487 days and 457 warmup/study feature windows per symbol were validated, with
+exact matches against the four existing admitted pilot reports.
+
+This is an explicit alternative to D-022, whose raw-trade default remains intact. M5
+opts in with `--adv-source futures_bars`; downstream fit admission regenerates the
+same evidence. Preserve independent book replay, book partition freshness and quality
+gates. M7 uses the feature and dated window/hash through existing sizing inputs.
+Keep the causal fingerprint independent of future monthly archive/report checksums;
+retain those hashes separately as offline admission provenance. Archive verification
+is not proof of exact historical publication latency.
+
+October 10 rejected raw trades remain rejected, and their measured deficits are
+retained. Sparse cross-checks do not prove every volume total correct. Do not mix
+spot volume with perpetual ADV or silently accept a corrupted trade corpus. D-039's
+inferred execution scope still requires admitted prior impact/funding models, settlement
+marks, fee/contract evidence and an actual research input manifest before M8 results.

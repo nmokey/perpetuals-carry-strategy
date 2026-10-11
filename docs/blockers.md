@@ -90,6 +90,13 @@ Never describe the modeled year as observed-book replay, carry old books forward
 
 ### B-010 — Research input and accounting gates are incomplete
 
+**2026-10-10 ADV update (D-040):** the active study uses verified futures-bar base
+volume and strict prior-30-day ADV, with 487 volume days and 457 feature windows
+validated per symbol. Full raw-trade coverage is not required for this explicit
+alternative. Raw-trade defaults/rejections remain unchanged; book input quality and
+replay gates still apply. Assemble dated M7 sizing evidence/manifests separately.
+
+
 **2026-10-10 mark-data update:** checksum-verified mark-price bars now cover all 457
 warmup/study days per symbol, with documented June 29 daily-archive repair. Exact
 funding settlement marks remain unverified; an open at the funding minute is not

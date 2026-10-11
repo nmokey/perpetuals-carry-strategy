@@ -126,10 +126,11 @@ remains in force until that implementation and validation change is completed.
 ## Coverage checklist and work needed
 
 1. **Completed:** validate continuous funding for July 2025–September 2026, including cadence and month boundaries; retain the hash-bound audit when inputs change.
-2. Acquire continuous BTC/SOL trades from June 2025–September 2026, or explicitly decide whether
-   bar-derived volume replaces the existing trade-derived ADV contract. Do not silently substitute
-   klines for trades. Reconcile every accepted trade day against independent volume and investigate
-   the October 2025 stress period for both symbols.
+2. **Completed (D-040):** active-study ADV uses exact original-string futures-bar volume,
+   with complete June 2025–September 2026 coverage and strict prior-30-day windows. M5 opts in
+   with `--adv-source futures_bars`; module raw-trade defaults remain intact. No full trade
+   backfill is required for this alternative. Preserve October 10 rejected-trade discrepancies
+   and the sparse pilot-cross-check limitations; assemble dated M7 sizing inputs separately.
 3. **Acquisition completed:** aligned futures and spot 1m prices for June 2025–September 2026,
    with spot/futures timestamp normalization and availability after bar close. Identify mark/index
    and any liquidation assumptions before the cash-flow backtest is claimed complete.

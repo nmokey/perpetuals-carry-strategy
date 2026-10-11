@@ -22,6 +22,25 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — Explicit bar-derived ADV validated and integrated
+
+Validated 32 cached monthly futures price ZIPs and all 487 days per symbol with
+exact original-string volume sums. Generated all 457 strict prior-30-day feature
+windows per symbol; pilot report totals match exactly on four days each. October
+10 rejected-trade discrepancies remain visible. No bulk raw-trade downloads.
+
+D-040 selects this explicit study alternative; M5 accepts `--adv-source futures_bars`
+while preserving its raw-trade default and all independent book admission gates.
+Corrected downstream evidence symmetry and separated causal feature hashes from
+whole-month offline provenance; future data/checksum changes do not alter earlier
+features. M7 sizing can consume dated features; no research manifest or impact fit
+was generated. Spec and analysis document source/latency/sparse-cross-check limits.
+
+97 adjacent checks passed, three network tests deselected; 16 isolated faults were
+caught by named tests. Full offline suite across parallel changes: 835 passed, ten
+network tests deselected. Ruff lint/format and whitespace checks passed. C++ unchanged;
+actual full-day book replay results are separately recorded below.
+
 ## 2026-10-10 — Monthly sample replay validation started
 
 Independent full-day C++ replay passed for BTC/SOL July 1, 2025: 119,267,326 update

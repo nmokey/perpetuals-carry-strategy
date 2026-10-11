@@ -359,3 +359,19 @@ and the existing validator deletes raw CSV exports after each pass. A failed rep
 stops validation; stopped acquisition leaves a visible waiting status. No extra
 archives are requested. This checks the top-25 criterion and retains timestamp ambiguity;
 it is not validation of deep books or exact venue execution timing.
+
+## Study ADV from existing futures bars
+
+The active study selects `impact.adv_source = "futures_bars"` (D-040). The calibration
+CLI still defaults to raw trades; pass `--adv-source futures_bars` explicitly.
+`bar_volume.verified_average_daily_volume(root, symbol, as_of)` revalidates original
+cached futures archives and returns exact base ADV, prior-30-day UTC bounds, method
+and causal digest. `verified_volume_inputs` also retains offline ZIP/report provenance.
+Calibration and downstream fitting regenerate identical evidence; book replay and
+quality admission remain required. M7 manifests must copy the dated feature into
+SizingInputs; none is manufactured by changing the study setting.
+
+`tools.audit_bar_volume --root data/btc-sol --symbol BTCUSDT --output /path/to/new.json`
+reproduces the complete daily audit without downloads; substitute SOLUSDT as needed.
+See `docs/analysis/bar-volume-adv.md` for full commands, validation and the preserved
+October 10 raw-trade discrepancy. Do not use spot volume as perpetual ADV.

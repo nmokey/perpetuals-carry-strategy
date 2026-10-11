@@ -24,7 +24,7 @@ import perpcarry_cpp as core
 from perpcarry.ingestion import fetch_trades, tardis_archive
 from perpcarry.ingestion.book_partitions import EVENT_COLUMNS, partition_files
 from perpcarry.integrity import partition_fingerprint, sha256
-from perpcarry.models import order_size
+from perpcarry.models import bar_volume, order_size
 from perpcarry.replay import updates_from_batch
 from perpcarry.storage import data_root, iter_parquet_batches, write_parquet
 
@@ -52,6 +52,7 @@ class Config:
     min_adv_fraction: float = 0.00001
     max_adv_fraction: float = 0.1
     adv_days: int = 30
+    adv_source: str = "trades"
     duration_ms: int = 10000
     slices: int = 5
     batch_size: int = 100000
@@ -59,6 +60,10 @@ class Config:
     queue_capacity: int = 65536
 
     def __post_init__(self):
+        if self.adv_source not in {"trades", "futures_bars"}:
+            raise ValueError("ADV source must be trades or futures_bars")
+        if self.adv_source == "futures_bars" and self.adv_days != 30:
+            raise ValueError("futures-bar ADV requires a 30-day window")
         if (
             min(self.sample_every, self.adv_days, self.slices, self.batch_size, self.queue_capacity)
             < 1
@@ -93,6 +98,7 @@ def verified_inputs(
     required = [
         (fetch_trades.STORAGE_DIR, (day - dt.timedelta(days=i)).isoformat())
         for i in range(0, config.adv_days + 1)
+        if config.adv_source == "trades"
     ]
     required.append(("book", day.isoformat()))
     verified = []
@@ -126,7 +132,10 @@ def verified_inputs(
         ):
             raise order_size.OrderSizeError(f"volume not reconciled: {symbol} {date}")
         verified.append(entries[0])
-    return [*verified, {"book_replay": replay}]
+    inputs = [*verified, {"book_replay": replay}]
+    if config.adv_source == "futures_bars":
+        inputs.append(bar_volume.verified_volume_inputs(root, symbol, day))
+    return inputs
 
 
 def _groups(files, batch_size):
@@ -235,8 +244,14 @@ def generate(
     root = data_root() if root is None else Path(root)
     config = config or Config()
     files = partition_files(tardis_archive.INCREMENTAL_BOOK_L2, symbol, day, root)
-    adv = order_size.average_daily_volume(symbol, day, days=config.adv_days, root=root)
+    adv = (
+        order_size.average_daily_volume(symbol, day, days=config.adv_days, root=root)
+        if config.adv_source == "trades"
+        else None
+    )
     inputs = verified_inputs(root, symbol, day, config)
+    if config.adv_source == "futures_bars":
+        adv = float(inputs[-1]["adv"]["base_adv"])
     frame = sample_rows(files, symbol, day, adv, config)
     partition = root / "calibration" / f"symbol={symbol}" / f"date={day}"
     partition.mkdir(parents=True, exist_ok=True)
@@ -287,8 +302,14 @@ def main() -> int:
     parser.add_argument("--sample-every", type=int, default=5000)
     parser.add_argument("--size-count", type=int, default=40)
     parser.add_argument("--side", choices=["buy", "sell"], default="buy")
+    parser.add_argument("--adv-source", choices=["trades", "futures_bars"], default="trades")
     args = parser.parse_args()
-    config = Config(sample_every=args.sample_every, size_count=args.size_count, side=args.side)
+    config = Config(
+        sample_every=args.sample_every,
+        size_count=args.size_count,
+        side=args.side,
+        adv_source=args.adv_source,
+    )
     for day in args.date:
         report = generate(args.symbol, day, config=config)
         print(

@@ -12,6 +12,7 @@ primary_form = "square_root"
 target = "slippage_vs_touch_bps"
 linear_diagnostic = true
 adv_days = 30
+adv_source = "futures_bars" # D-040; calibration CLI requires explicit --adv-source.
 rolling_days = 90
 refit = "monthly_using_only_completed_prior_book_days"
 

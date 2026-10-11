@@ -328,3 +328,49 @@ def test_reused_volume_evidence_cannot_hide_a_defect(corpus, defect):
     else:
         with pytest.raises(validate_data.ValidationError, match="incomplete or stale"):
             corpus_inventory.inventory(corpus, volume_report=previous)
+
+
+def test_bar_adv_opt_in_keeps_books_but_drops_unused_trade_requirement(corpus, monkeypatch):
+    import shutil
+
+    from perpcarry.models import bar_volume
+
+    root = corpus
+    shutil.rmtree(root / fetch_trades.STORAGE_DIR)
+    config = replace(CONFIG, adv_source="futures_bars", adv_days=30)
+    feature = {
+        "method": bar_volume.METHOD,
+        "symbol": SYMBOL,
+        "base_adv": "2000.125",
+        "adv_start_ms": START - 137 - 30 * 86400000,
+        "adv_end_exclusive_ms": START - 137,
+        "evidence_sha256": "b" * 64,
+    }
+    monkeypatch.setattr(
+        bar_volume, "verified_volume_inputs", lambda root, symbol, day: {"adv": feature}
+    )
+    manifest = calibration.generate(SYMBOL, DAY, root=root, config=config)
+    assert manifest["config"]["adv_source"] == "futures_bars"
+    assert manifest["inputs"][-1] == {"adv": feature}
+    assert calibration.verified_inputs(root, SYMBOL, DAY, config) == manifest["inputs"]
+    from perpcarry.models import impact_model
+
+    loaded, evidence = impact_model.load_calibration(root, [SYMBOL])
+    assert len(loaded) == manifest["rows"]
+    assert evidence[0]["symbol"] == SYMBOL
+    feature["evidence_sha256"] = "c" * 64
+    with pytest.raises(impact_model.ImpactModelError, match="input evidence changed"):
+        impact_model.load_calibration(root, [SYMBOL])
+    feature["evidence_sha256"] = "b" * 64
+    frame = pd.read_parquet(
+        root / "calibration" / f"symbol={SYMBOL}" / f"date={DAY}" / "part-0.parquet"
+    )
+    assert (frame["adv"] == 2000.125).all()
+    with pytest.raises(order_size.OrderSizeError):
+        calibration.generate(SYMBOL, DAY, root=root, config=CONFIG)
+    replay_path = root / "reports" / f"book-{SYMBOL}-{DAY}.json"
+    replay = json.loads(replay_path.read_text())
+    replay["passed"] = False
+    replay_path.write_text(json.dumps(replay))
+    with pytest.raises(order_size.OrderSizeError, match="book replay rejected"):
+        calibration.generate(SYMBOL, DAY, root=root, config=config)
