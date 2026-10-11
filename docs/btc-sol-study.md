@@ -80,7 +80,8 @@ spread, depth, impact decay or fill prices on the remaining 353 study days per s
 carry an old book forward, interpolate it into missing days, or fit a whole-year coefficient and
 apply it to earlier decisions.
 
-Two execution-coverage choices are explicitly distinct; the headline choice is pending:
+Two execution-coverage choices are explicitly distinct; the user selected option 2
+(monthly-calibrated inferred costs, D-039) and excluded continuous daily book acquisition:
 
 1. **Daily L2 execution replay.** Requires incremental L2 and matching validation references for
    all 365 study days per symbol, plus enough warm-up book history for initial calibration.
@@ -93,8 +94,11 @@ Two execution-coverage choices are explicitly distinct; the headline choice is p
    spread assumptions and stress sensitivity. This is a model-based backtest, not continuous
    observed-book replay. A sample-day-only study cannot be advertised as a full-year backtest.
 
-The user is deciding which should headline the research. Public funding, prices, metadata,
-trades and sampled book validation can proceed without prejudging that choice.
+The headline study uses continuous funding/prices with inferred execution costs. Full daily
+L2 is outside acquisition scope. Validate the sampled books, prior impact fits and spread/hedge
+cost assumptions before results. Existing bars contain base/quote volume; evaluate a validated
+bar-derived ADV contract before expanding raw trades. The current trade-derived contract
+remains in force until that implementation and validation change is completed.
 
 ## Engineering and model requirements
 

@@ -22,7 +22,7 @@ rolling_days = 90
 cadence_policy = "validate_per_row_and_segment_or_causally_resample"
 
 [execution]
-headline_coverage = "pending_user_choice"
+headline_coverage = "monthly_calibrated_inferred_costs" # User-selected; no continuous daily L2.
 public_books = "first_of_month_full_day_L2_plus_top25_reference"
 queue_capacity = 65536
 

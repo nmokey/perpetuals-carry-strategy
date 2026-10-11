@@ -956,3 +956,22 @@ overwrite and marks truncated coverage incomplete. Completion needs the full fun
 decision path plus an end-exclusive-minus-one-millisecond valuation; it may retain an
 open position. This is not daily-return coverage, research adequacy or Sharpe certification.
 M8 owns metrics and fee sensitivity after B-009–B-012 and dated research inputs are cleared.
+
+## D-039 — User-selected monthly-calibrated inferred execution (2026-10-10)
+
+The user explicitly excluded continuous daily book acquisition because access and storage
+are unsuitable for this study. Headline BTC/SOL research retains the common 12-month window
+and uses continuous funding/prices with inferred execution costs calibrated only on
+completed prior monthly sample days. Finish the currently authorized 15 book days per
+symbol (three warmup, twelve scored), including top-25 references. Preserve C++ replay
+and ingestion/consumer queue separation. Do not expand regular-day L2 acquisition.
+
+This resolves the B-009 methodology choice, not sample replay, impact-model validation or
+headline research readiness. Report modeled execution, sparse independent-day evidence,
+spread/hedge assumptions and stress sensitivity. No Sharpe/capacity target is forced.
+
+Existing complete minute bar partitions contain base and quote volume. Assess bar-derived
+ADV before bulk raw-trade acquisition; this is an alternative awaiting an explicit
+implemented and validated input contract, not permission to silently substitute or hide
+the October 10 trade-archive discrepancies. Historical settlement/valuation marks, fee
+and contract evidence remain acquisition/admission requirements under B-010/B-011.

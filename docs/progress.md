@@ -22,6 +22,17 @@ Milestone status at a glance:
 
 ---
 
+## 2026-10-10 — Execution scope selected by user
+
+Recorded D-039 and updated study config: use monthly-calibrated inferred execution; no
+continuous daily books. B-009's scope choice is resolved, while sample/impact validation
+remains open. At this check 32/60 monthly archives were converted; acquisition was running
+on BTC March 1, 2026 updates without a recorded cooldown. Existing price partitions were
+confirmed to retain base/quote volume, so raw trades are not automatically required for
+a future validated bar-derived ADV method. No ADV code/contract changed in this step.
+Settlement/valuation marks and historical fee/contract evidence remain missing or unverified.
+No new download batch or remote publication was started.
+
 ## 2026-10-10 — BTC/SOL monthly book acquisition resumed
 
 User authorized acquiring first-of-month books before other missing datasets. Started a

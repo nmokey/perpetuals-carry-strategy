@@ -78,9 +78,15 @@ undercoverage and downside asymmetry remain. Weekly cumulative coverage is only
 M7 policy must account for these failures before interpreting probability gates as calibrated.
 See `docs/analysis/M6-T3-rolling-funding.md`.
 
-### B-009 — Continuous BTC/SOL execution coverage is unresolved
+### B-009 — Sample-calibrated inferred execution still needs validation
 
-**Blocks:** claiming a year of observed-book execution or headline capacity/Sharpe. Public first-of-month feeds provide 12/365 scored days per symbol, plus three warmup days. Regular-day book requests require access (401 on the probe). Choose full daily historical replay, obtaining missing L2 plus references for the study and sufficient warmup, or explicitly headline continuous funding/price results with strictly prior monthly-calibrated inferred costs. User choice is pending; public acquisition and sample validation continue. Never carry forward old books or treat 400M rows as temporal coverage.
+**Scope choice resolved (D-039):** the user selected monthly-calibrated inferred execution
+and excluded continuous daily book acquisition. First-of-month feeds provide 12/365 scored
+days per symbol, plus three warmup days. Remaining gates are paired book replay validation,
+strictly prior impact fits, spread/spot execution assumptions and sparse-sample/stress
+validation. These block defensible headline capacity/Sharpe, not the choice of scope.
+Never describe the modeled year as observed-book replay, carry old books forward, or treat
+400M rows as temporal coverage. Full daily L2 is no longer an acquisition requirement.
 
 ### B-010 — Research input and accounting gates are incomplete
 
