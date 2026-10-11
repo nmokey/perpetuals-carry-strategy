@@ -363,3 +363,21 @@ settlement. Poison both a future suffix and the current target value, withhold f
 and shuffle future rows; predictions before admission must match exactly. Score cumulative
 outcomes afterward, with explicit endpoint/cadence exclusions. Never use their future
 availability to decide whether the earlier forecast is emitted.
+
+## C20 — Keep PRs atomic by milestone task
+
+User instruction, 2026-10-10, after accumulated M5–M7 work was published together.
+
+**Rule.** One PR covers one named milestone task, such as M7-T4, with its implementation,
+tests and directly related documentation. Combine tasks or milestones only at the user's
+explicit request.
+
+**Why.** The accumulated publication spanned 93 files and multiple milestones, making
+review, attribution and selective rollback unnecessarily difficult.
+
+**How to apply.** Isolate and commit each task as it is completed, before accumulating
+the next task's changes. Name the task in its PR title and description, state its acceptance
+checks and remaining gates, and keep unrelated cleanup or independently useful fixes in
+separate PRs. Dependencies can use stacked task PRs; dependency order does not justify
+bundling multiple tasks. This scope requirement does not grant standing permission to
+push or create PRs; honor the user's existing authorization for each action.

@@ -31,7 +31,7 @@ background reading:
 
 | File | What it is | When to touch it |
 |---|---|---|
-| `docs/conventions.md` | Accumulated lessons, C1–C12 | **Read before starting work; apply every rule.** Append a new entry whenever a lesson is learned or reversed |
+| `docs/conventions.md` | Accumulated lessons, C1–C20 | **Read before starting work; apply every rule.** Append a new entry whenever a lesson is learned or reversed |
 | `docs/progress.md` | Dated log of what was verified | Add a dated entry (`YYYY-MM-DD`, newest first) as part of finishing work — not as a later cleanup pass |
 | `docs/blockers.md` | What's blocked, and the interim path | Check before starting a milestone; log new blockers as they appear |
 | `docs/decisions.md` | OD-N resolution status + D-NNN build decisions | Log any decision the design doc didn't specify; when resolving an OD, update the design doc's Status line too |
@@ -42,6 +42,7 @@ Two of those conventions govern how this session operates and are worth restatin
 
 - **C1 — never take a remote action without explicit approval.** No push, PR, issue, tag, release, or write to any external service without asking and getting a yes. Read-only remote calls (`git fetch`, `git ls-remote`) are fine. Approval is per-action, never standing. Commit locally freely; then ask.
 - **C2 — adversarial self-audit before requesting a push.** Read the actual diff, verify every passing-test claim was actually run this session, check each convention against the diff, confirm design-doc acceptance criteria are genuinely met, and anticipate what a skeptical reviewer would flag. Report what the audit found — including anything it did not clear — then ask.
+- **C20 — atomic PRs by milestone task.** Each PR covers one named task (for example, M7-T4), including its implementation, tests and directly related docs. Keep each task's commits separate as work proceeds. Split independent cleanup or fixes into separate PRs. Combine tasks or milestones only when explicitly requested by the user.
 
 ## Commands
 
